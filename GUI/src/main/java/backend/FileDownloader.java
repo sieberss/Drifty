@@ -16,7 +16,7 @@ import properties.Program;
 import support.DownloadMetrics;
 import support.Job;
 import ui.UIController;
-import utils.DbConnection;
+import data.FileRepo;
 import utils.UnitConverter;
 import utils.Utility;
 
@@ -86,7 +86,7 @@ public class FileDownloader extends Task<Integer> {
         sendInfoMessage(String.format(TRYING_TO_DOWNLOAD_F, filename));
         String startDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
         try {
-            DbConnection db = DbConnection.getInstance();
+            FileRepo db = FileRepo.getInstance();
             switch (type) {
                 case YOUTUBE, INSTAGRAM -> downloadYoutubeOrInstagram(LinkType.getLinkType(job.getSourceLink()).equals(LinkType.SPOTIFY));
                 case OTHER -> splitDecision();
@@ -97,7 +97,7 @@ public class FileDownloader extends Task<Integer> {
                 downloadedSize = new File(Paths.get(dir).resolve(filename).toString()).length();
             }
             String endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-            db.updateFileState(
+            db.updateFileInfoByName(
                     job.getSourceLink(),
                     job.getDir(),
                     job.getFilename(),

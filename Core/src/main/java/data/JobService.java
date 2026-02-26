@@ -4,7 +4,6 @@ import init.Environment;
 import support.Job;
 import support.JobHistory;
 import support.Jobs;
-import utils.DbConnection;
 
 import java.sql.SQLException;
 import java.util.Collection;
@@ -17,8 +16,8 @@ public class JobService {
     public static JobHistory getJobHistory() {
         JobHistory jobHistory = new JobHistory();
         try {
-            DbConnection dbConnection = DbConnection.getInstance();
-            Collection<Job> completedJobs = dbConnection.getCompletedJobs();
+            FileRepo fileRepo = FileRepo.getInstance();
+            Collection<Job> completedJobs = fileRepo.getCompletedJobs();
 
             for (Job job : completedJobs) {
                 jobHistory.addJob(job, true);
@@ -32,8 +31,8 @@ public class JobService {
     public static Jobs getJobs() {
         Jobs jobs = new Jobs();
         try {
-            DbConnection dbConnection = DbConnection.getInstance();
-            Collection<Job> queuedJobs = dbConnection.getQueuedJobs();
+            FileRepo fileRepo = FileRepo.getInstance();
+            Collection<Job> queuedJobs = fileRepo.getQueuedJobs();
 
             for (Job job : queuedJobs) {
                 jobs.add(job);

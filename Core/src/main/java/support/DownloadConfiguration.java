@@ -8,7 +8,7 @@ import data.JobService;
 import init.Environment;
 import properties.LinkType;
 import properties.Mode;
-import utils.DbConnection;
+import data.FileRepo;
 import utils.MessageBroker;
 import utils.Utility;
 
@@ -259,14 +259,8 @@ public class DownloadConfiguration {
             }
             distinctJobList.put(job.hashCode(), job);
             try {
-                DbConnection dbConnection = DbConnection.getInstance();
-                dbConnection.addFileRecordToQueue(
-                        filename,
-                        job.getSourceLink(),
-                        job.getDownloadLink(),
-                        directory,
-                        currentSessionId
-                );
+                FileRepo fileRepo = FileRepo.getInstance();
+                fileRepo.addJobToQueue(job, currentSessionId);
             } catch (SQLException e) {
                 msgBroker.msgLogError("Failed to record job to database during playlist processing: " + e.getMessage());
                 throw new RuntimeException(e);

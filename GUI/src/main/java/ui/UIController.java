@@ -36,7 +36,7 @@ import properties.OS;
 import support.Job;
 import support.JobHistory;
 import support.Jobs;
-import utils.DbConnection;
+import data.FileRepo;
 import utils.Utility;
 
 import java.io.File;
@@ -495,8 +495,8 @@ public final class UIController {
         }
         if (oldJob != null) {
             try {
-                DbConnection dbConnection = DbConnection.getInstance();
-                dbConnection.updateFile(
+                FileRepo fileRepo = FileRepo.getInstance();
+                fileRepo.updateQueuedFileByName(
                         newJob.getFilename(),
                         oldJob.getSourceLink(),
                         newJob.getDir()
@@ -508,14 +508,8 @@ public final class UIController {
             jobs.remove(oldJob);
         } else {
             try {
-                DbConnection dbConnection = DbConnection.getInstance();
-                dbConnection.addFileRecordToQueue(
-                        newJob.getFilename(),
-                        newJob.getSourceLink(),
-                        newJob.getDownloadLink(),
-                        newJob.getDir(),
-                        currentSessionId
-                );
+                FileRepo fileRepo = FileRepo.getInstance();
+                fileRepo.addJobToQueue(newJob, currentSessionId);
             } catch (SQLException e) {
                 M.msgLogError("Failed to add job to database: " + e.getMessage());
                 return;
@@ -528,8 +522,8 @@ public final class UIController {
 
     private void removeJobFromList(Job oldJob) {
         try {
-            DbConnection dbConnection = DbConnection.getInstance();
-            dbConnection.deleteQueuedFile(
+            FileRepo fileRepo = FileRepo.getInstance();
+            fileRepo.deleteQueuedFileByName(
                     oldJob.getSourceLink(),
                     oldJob.getDir(),
                     oldJob.getFilename()
@@ -632,8 +626,8 @@ public final class UIController {
          */
         INSTANCE.getHistory().clear();
         try {
-            DbConnection dbConnection = DbConnection.getInstance();
-            dbConnection.deleteFilesHistory();
+            FileRepo fileRepo = FileRepo.getInstance();
+            fileRepo.deleteFilesHistory();
         } catch (SQLException e) {
             ConfirmationDialog ask = new ConfirmationDialog("Error", "Failed to clear job history! " + e.getMessage(), true, false);
             ask.getResponse();

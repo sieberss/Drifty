@@ -5,7 +5,7 @@ import properties.OS;
 import properties.Program;
 import updater.UpdateChecker;
 import utils.CopyExecutables;
-import utils.DbConnection;
+import data.FileRepo;
 import utils.MessageBroker;
 import utils.Utility;
 
@@ -27,7 +27,7 @@ import static properties.Program.YT_DLP;
 public class Environment {
     private static MessageBroker msgBroker;
     private static boolean isAdministrator;
-    private static DbConnection dbConnection;
+    private static FileRepo fileRepo;
     public static int currentSessionId;
 
     /*
@@ -74,11 +74,11 @@ public class Environment {
             }
         }
         try {
-            dbConnection = DbConnection.getInstance();
-            dbConnection.createTables();
+            fileRepo = FileRepo.getInstance();
+            fileRepo.createTables();
 
             String startDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-            currentSessionId = dbConnection.addSessionRecord(startDate);
+            currentSessionId = fileRepo.addSessionRecord(startDate);
         } catch (SQLException e) {
             msgBroker.msgInitError("Failed to setup the database: " + e.getMessage());
             Environment.terminate(1);
@@ -99,7 +99,7 @@ public class Environment {
     public static void terminate(int exitCode) {
         String endDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
         try {
-            dbConnection.updateSessionEndDate(currentSessionId, endDate);
+            fileRepo.updateSessionEndDate(currentSessionId, endDate);
         } catch (SQLException e) {
             msgBroker.msgLogError("Failed to update session end date: " + e.getMessage());
         }

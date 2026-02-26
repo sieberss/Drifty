@@ -7,7 +7,7 @@ import properties.LinkType;
 import properties.Program;
 import support.DownloadMetrics;
 import support.Job;
-import utils.DbConnection;
+import data.FileRepo;
 import utils.MessageBroker;
 
 import java.io.*;
@@ -34,23 +34,15 @@ public class FileDownloader implements Runnable {
     private final DownloadMetrics downloadMetrics;
     private final int numberOfThreads;
     private final long threadMaxDataSize;
-    private final String dir;
-    private final String fileLink;
-    private final String downloadLink;
     private final Path directoryPath;
     private final LinkType linkType;
-    private String fileName;
     private URL url;
     private int fileId;
 
     public FileDownloader(Job job) {
         this.job = job;
-        this.fileLink = job.getSourceLink();
-        this.downloadLink = job.getDownloadLink();
-        this.linkType = LinkType.getLinkType(this.downloadLink);
-        this.fileName = job.getFilename();
-        this.dir = job.getDir();
-        this.directoryPath = Paths.get(dir).toAbsolutePath();
+        this.linkType = LinkType.getLinkType(job.getDownloadLink());
+        this.directoryPath = Paths.get(job.getDir()).toAbsolutePath();
         this.downloadMetrics = new DownloadMetrics();
         this.numberOfThreads = downloadMetrics.getThreadCount();
         this.threadMaxDataSize = downloadMetrics.getMultiThreadingThreshold();
@@ -58,8 +50,9 @@ public class FileDownloader implements Runnable {
     }
 
     private void downloadFile() {
+        String fileName = job.getFilename();
         try {
-            DbConnection db = DbConnection.getInstance();
+            FileRepo db = FileRepo.getInstance();
             String endDownloadingTime;
             try {
                 ReadableByteChannel readableByteChannel;
@@ -88,7 +81,7 @@ public class FileDownloader implements Runnable {
                             downloaderThreads.add(downloader);
                             tempFiles.add(file);
                         }
-                        ProgressBarThread progressBarThread = new ProgressBarThread(fileOutputStreams, partSizes, fileName, dir, totalSize, downloadMetrics);
+                        ProgressBarThread progressBarThread = new ProgressBarThread(fileOutputStreams, partSizes, fileName, job.getDir(), totalSize, downloadMetrics);
                         progressBarThread.start();
                         M.msgDownloadInfo(String.format(DOWNLOADING_F, fileName));
                         // check if all the files are downloaded
@@ -102,7 +95,7 @@ public class FileDownloader implements Runnable {
                         InputStream urlStream = url.openStream();
                         readableByteChannel = Channels.newChannel(urlStream);
                         FileOutputStream fos = new FileOutputStream(directoryPath.resolve(fileName).toFile());
-                        ProgressBarThread progressBarThread = new ProgressBarThread(fos, totalSize, fileName, dir, downloadMetrics);
+                        ProgressBarThread progressBarThread = new ProgressBarThread(fos, totalSize, fileName, job.getDir(), downloadMetrics);
                         progressBarThread.start();
                         M.msgDownloadInfo(String.format(DOWNLOADING_F, fileName));
                         fos.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
@@ -116,23 +109,23 @@ public class FileDownloader implements Runnable {
                     Path downloadedFilePath = directoryPath.resolve(fileName);
                     long downloadedSize = Files.size(downloadedFilePath);
                     endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                    db.updateFileInfo(fileId, FileState.COMPLETED, endDownloadingTime, (int) downloadedSize);
+                    db.updateFileInfoById(fileId, FileState.COMPLETED, endDownloadingTime, (int) downloadedSize);
                 } catch (SecurityException e) {
                     endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                    db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                    db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                     M.msgDownloadError("Write access to the download directory is DENIED! " + e.getMessage());
                 } catch (FileNotFoundException fileNotFoundException) {
                     endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                    db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                    db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                     M.msgDownloadError(FILE_NOT_FOUND_ERROR);
                 } catch (IOException e) {
                     endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                    db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                    db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                     M.msgDownloadError(FAILED_TO_DOWNLOAD_CONTENTS + e.getMessage());
                 }
             } catch (NullPointerException e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 M.msgDownloadError(FAILED_READING_STREAM);
             }
         } catch (SQLException e) {
@@ -141,14 +134,15 @@ public class FileDownloader implements Runnable {
     }
 
     private void downloadYoutubeOrInstagram(boolean isSpotifySong) {
-        String[] fullCommand = new String[]{Program.get(Program.YT_DLP), "--quiet", "--progress", "-P", dir, downloadLink, "-o", fileName, "-f", (isSpotifySong ? "bestaudio" : "mp4")};
+        String fileName = job.getFilename();
+        String[] fullCommand = new String[]{Program.get(Program.YT_DLP), "--quiet", "--progress", "-P", job.getDir(), job.getDownloadLink(), "-o", fileName, "-f", (isSpotifySong ? "bestaudio" : "mp4")};
         ProcessBuilder processBuilder = new ProcessBuilder(fullCommand);
         processBuilder.inheritIO();
         M.msgDownloadInfo(String.format(DOWNLOADING_F, fileName));
         Process process;
         int exitValueOfYtDlp = 1;
         try {
-            DbConnection db = DbConnection.getInstance();
+            FileRepo db = FileRepo.getInstance();
             String endDownloadingTime;
             try {
                 process = processBuilder.start();
@@ -156,11 +150,11 @@ public class FileDownloader implements Runnable {
                 exitValueOfYtDlp = process.exitValue();
             } catch (IOException e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 M.msgDownloadError("Failed to start download process for \"" + fileName + "\"");
             } catch (Exception e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 String msg = e.getMessage();
                 String[] messageArray = msg.split(",");
                 if (messageArray.length >= 1 && messageArray[0].toLowerCase().trim().replaceAll(" ", "").contains("cannotrunprogram")) { // If yt-dlp program is not marked as executable
@@ -184,11 +178,11 @@ public class FileDownloader implements Runnable {
                         if (conversionProcessMessage.contains("Failed")) {
                             M.msgDownloadError(conversionProcessMessage);
                             fileName = fileName.replace("mp3", "webm"); // If mp3 conversion fails, then the file name will be changed to the webm file.
-                            db.updateFileName(fileId, fileName);
+                            db.updateFileNameById(fileId, fileName);
                             throw new Exception(conversionProcessMessage);
                         } else {
                             endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                            db.updateFileInfo(fileId, FileState.COMPLETED, endDownloadingTime, (int) downloadedSize);
+                            db.updateFileInfoById(fileId, FileState.COMPLETED, endDownloadingTime, (int) downloadedSize);
                             M.msgDownloadInfo("Successfully converted to mp3!");
                         }
                     }
@@ -201,7 +195,7 @@ public class FileDownloader implements Runnable {
                 }
             } catch (Exception e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 M.msgDownloadError("An Unknown Error occurred! " + e.getMessage());
                 throw new RuntimeException(e);
             }
@@ -230,7 +224,7 @@ public class FileDownloader implements Runnable {
         }
         // check if it is merged-able
         if (completed == numberOfThreads) {
-            try (FileOutputStream fos = new FileOutputStream(directoryPath.resolve(fileName).toFile())) {
+            try (FileOutputStream fos = new FileOutputStream(directoryPath.resolve(job.getFilename()).toFile())) {
                 long position = 0;
                 for (int i = 0; i < numberOfThreads; i++) {
                     File f = tempFiles.get(i);
@@ -249,19 +243,20 @@ public class FileDownloader implements Runnable {
 
     @Override
     public void run() {
+        String fileName = job.getFilename();
         String startDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
         int sessionId = currentSessionId;
         try {
-            DbConnection db = DbConnection.getInstance();
+            FileRepo db = FileRepo.getInstance();
             String endDownloadingTime;
             try {
-                fileId = db.addFileRecord(fileName, fileLink, downloadLink, directoryPath.toString(), startDownloadingTime, sessionId);
+                fileId = db.addStartedJob(job, startDownloadingTime, sessionId);
 
                 // If the link is of a YouTube or Instagram video, then the following block of code will execute.
                 if (linkType.equals(LinkType.YOUTUBE) || linkType.equals(LinkType.INSTAGRAM)) {
                     downloadYoutubeOrInstagram(LinkType.getLinkType(job.getSourceLink()).equals(LinkType.SPOTIFY));
                 } else {
-                    url = new URI(downloadLink).toURL();
+                    url = new URI(job.getDownloadLink()).toURL();
                     URLConnection openConnection = url.openConnection();
                     openConnection.connect();
                     long totalSize = openConnection.getHeaderFieldLong("Content-Length", 0);
@@ -278,22 +273,22 @@ public class FileDownloader implements Runnable {
                 Path downloadedFilePath = directoryPath.resolve(fileName);
                 long downloadedSize = Files.size(downloadedFilePath);
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.COMPLETED, endDownloadingTime, (int) downloadedSize);
+                db.updateFileInfoById(fileId, FileState.COMPLETED, endDownloadingTime, (int) downloadedSize);
             } catch (MalformedURLException | URISyntaxException e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 M.msgLinkError(INVALID_LINK);
             } catch (InvalidPathException e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 M.msgDownloadError("The downloaded file path (" + directoryPath.resolve(fileName) + ") is invalid! " + e.getMessage());
             } catch (IOException e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
                 M.msgDownloadError(String.format(FAILED_CONNECTION_F, url));
             } catch (Exception e) {
                 endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                db.updateFileInfo(fileId, FileState.FAILED, endDownloadingTime, 0);
+                db.updateFileInfoById(fileId, FileState.FAILED, endDownloadingTime, 0);
             }
         } catch (SQLException e) {
             M.msgDownloadError("An error occurred while trying to connect to the database! " + e.getMessage());

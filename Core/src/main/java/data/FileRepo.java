@@ -1,4 +1,4 @@
-package utils;
+package data;
 
 import properties.FileState;
 import properties.Program;
@@ -7,13 +7,12 @@ import support.Job;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Objects;
 
-public final class DbConnection {
+public final class FileRepo {
     private static Connection connection;
-    private static volatile DbConnection dbConnection; // volatile keyword ensures that multiple threads handle the uniqueInstance variable correctly when it is being initialized to the DbConnection instance. This way we can avoid race conditions and ensure consistency in our database operations.
+    private static volatile FileRepo fileRepo; // volatile keyword ensures that multiple threads handle the uniqueInstance variable correctly when it is being initialized to the DbConnection instance. This way we can avoid race conditions and ensure consistency in our database operations.
 
-    private DbConnection() throws SQLException {
+    private FileRepo() throws SQLException {
         if (connection != null && !connection.isClosed()) {
             return;
         }
@@ -25,16 +24,16 @@ public final class DbConnection {
         return DriverManager.getConnection(url);
     }
 
-    public static DbConnection getInstance() throws SQLException {
-        if (dbConnection == null) {
+    public static FileRepo getInstance() throws SQLException {
+        if (fileRepo == null) {
             // Synchronizing the block inside the if statement to make sure only one thread can enter at a time when the instance is null.
-            synchronized (DbConnection.class) {
-                if (dbConnection == null) {
-                    dbConnection = new DbConnection();
+            synchronized (FileRepo.class) {
+                if (fileRepo == null) {
+                    fileRepo = new FileRepo();
                 }
             }
         }
-        return dbConnection;
+        return fileRepo;
     }
 
     public void createTables() throws SQLException {
@@ -94,13 +93,13 @@ public final class DbConnection {
         }
     }
 
-    public void addFileRecordToQueue(String fileName, String fileUrl, String downloadUrl, String saveTargetPath, int sessionId) throws SQLException {
+    public void addJobToQueue(Job job, int sessionId) throws SQLException {
         String insertFileQuery = "INSERT INTO FILE (FileName, FileUrl, DownloadUrl, SaveTargetPath, State, SessionId) VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(insertFileQuery, Statement.RETURN_GENERATED_KEYS)) {
-            preparedStatement.setString(1, fileName);
-            preparedStatement.setString(2, fileUrl);
-            preparedStatement.setString(3, downloadUrl);
-            preparedStatement.setString(4, saveTargetPath);
+            preparedStatement.setString(1, job.getFilename());
+            preparedStatement.setString(2, job.getSourceLink());
+            preparedStatement.setString(3, job.getDownloadLink());
+            preparedStatement.setString(4, job.getDir());
             preparedStatement.setString(5, FileState.QUEUED.name());
             preparedStatement.setInt(6, sessionId);
             preparedStatement.executeUpdate();
@@ -114,15 +113,15 @@ public final class DbConnection {
         }
     }
 
-    public int addFileRecord(String fileName, String fileUrl, String downloadUrl, String saveTargetPath, String startDownloadingTime, int sessionId) throws SQLException {
+    public int addStartedJob(Job job, String startDownloadingTime, int sessionId) throws SQLException {
         String insertFileQuery = "INSERT INTO FILE (FileName, FileUrl, DownloadUrl, SaveTargetPath, DownloadStartTime, State, SessionId) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(insertFileQuery, Statement.RETURN_GENERATED_KEYS)) {
-            preparedStatement.setString(1, fileName);
-            preparedStatement.setString(2, fileUrl);
-            preparedStatement.setString(3, downloadUrl);
-            preparedStatement.setString(4, saveTargetPath);
+            preparedStatement.setString(1, job.getFilename());
+            preparedStatement.setString(2, job.getSourceLink());
+            preparedStatement.setString(3, job.getDownloadLink());
+            preparedStatement.setString(4, job.getDir());
             preparedStatement.setString(5, startDownloadingTime);
-            preparedStatement.setString(6, FileState.QUEUED.name());
+            preparedStatement.setString(6, FileState.STARTED.name());
             preparedStatement.setInt(7, sessionId);
             preparedStatement.executeUpdate();
 
@@ -135,7 +134,7 @@ public final class DbConnection {
         }
     }
 
-    public void updateFileName(int fileId, String fileName) throws SQLException {
+    public void updateFileNameById(int fileId, String fileName) throws SQLException {
         String updateFileQuery = "UPDATE FILE SET FileName = ? WHERE Id = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(updateFileQuery)) {
             preparedStatement.setString(1, fileName);
@@ -144,7 +143,7 @@ public final class DbConnection {
         }
     }
 
-    public void updateFileInfo(int fileId, FileState state, String endDownloadingTime, int size) throws SQLException {
+    public void updateFileInfoById(int fileId, FileState state, String endDownloadingTime, int size) throws SQLException {
         String updateFileQuery = "UPDATE FILE SET State = ?, DownloadEndTime = ?, Size = ? WHERE Id = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(updateFileQuery)) {
             preparedStatement.setString(1, state.name());
@@ -155,7 +154,7 @@ public final class DbConnection {
         }
     }
 
-    public void updateFileState(String fileUrl, String saveTargetPath, String fileName, FileState state, String startDownloadingTime, String endDownloadingTime, int size) throws SQLException {
+    public void updateFileInfoByName(String fileUrl, String saveTargetPath, String fileName, FileState state, String startDownloadingTime, String endDownloadingTime, int size) throws SQLException {
         String updateFileQuery = "UPDATE FILE SET State = ?, DownloadStartTime = ?, DownloadEndTime = ?, Size = ? WHERE FileUrl = ? AND SaveTargetPath = ? AND FileName = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(updateFileQuery)) {
             preparedStatement.setString(1, state.name());
@@ -169,7 +168,7 @@ public final class DbConnection {
         }
     }
 
-    public void updateFile(String fileName, String fileUrl, String saveTargetPath) throws SQLException {
+    public void updateQueuedFileByName(String fileName, String fileUrl, String saveTargetPath) throws SQLException {
         String updateFileQuery = "UPDATE FILE SET FileName = ?, SaveTargetPath = ? WHERE FileUrl = ? AND State = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(updateFileQuery)) {
             preparedStatement.setString(1, fileName);
@@ -181,9 +180,17 @@ public final class DbConnection {
     }
 
     public Collection<Job> getCompletedJobs() throws SQLException {
+        return getJobsByState(FileState.COMPLETED);
+    }
+
+    public Collection<Job> getQueuedJobs() throws SQLException {
+        return getJobsByState(FileState.QUEUED);
+    }
+
+    private ArrayList<Job> getJobsByState(FileState state) throws SQLException {
         String query = "SELECT FileUrl, DownloadUrl, SaveTargetPath, FileName FROM FILE WHERE State = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            preparedStatement.setString(1, FileState.COMPLETED.name());
+            preparedStatement.setString(1, state.name());
 
             ResultSet resultSet = preparedStatement.executeQuery();
             ArrayList<Job> jobs = new ArrayList<>();
@@ -200,31 +207,7 @@ public final class DbConnection {
         }
     }
 
-    public Collection<Job> getQueuedJobs() throws SQLException {
-        String query = "SELECT FileUrl, DownloadUrl, SaveTargetPath, FileName FROM FILE WHERE State = ?";
-        try (PreparedStatement preparedStatement = connection.prepareStatement(query)) {
-            preparedStatement.setString(1, FileState.QUEUED.name());
-
-            ResultSet resultSet = preparedStatement.executeQuery();
-            ArrayList<Job> jobs = new ArrayList<>();
-
-            while (resultSet.next()) {
-                String fileUrl = resultSet.getString("FileUrl");
-                String downloadUrl = resultSet.getString("DownloadUrl");
-                String saveTargetPath = resultSet.getString("SaveTargetPath");
-                String fileName = resultSet.getString("FileName");
-
-                if (!Objects.equals(downloadUrl, fileUrl)) {
-                    jobs.add(new Job(fileUrl, saveTargetPath, fileName, downloadUrl));
-                } else {
-                    jobs.add(new Job(fileUrl, saveTargetPath, fileName, null));
-                }
-            }
-            return jobs;
-        }
-    }
-
-    public void deleteQueuedFile(String fileUrl, String saveTargetPath, String fileName) throws SQLException {
+    public void deleteQueuedFileByName(String fileUrl, String saveTargetPath, String fileName) throws SQLException {
         String deleteFileQuery = "DELETE FROM FILE WHERE FileUrl = ? AND SaveTargetPath = ? AND FileName = ? AND State = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(deleteFileQuery)) {
             preparedStatement.setString(1, fileUrl);
@@ -240,11 +223,9 @@ public final class DbConnection {
     }
 
     public void deleteFilesHistory() throws SQLException {
-        String deleteFileQuery = "DELETE FROM FILE WHERE State IN (?, ?, ?)";
+        String deleteFileQuery = "DELETE FROM FILE WHERE State <> ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(deleteFileQuery)) {
-            preparedStatement.setString(1, FileState.COMPLETED.name());
-            preparedStatement.setString(2, FileState.FAILED.name());
-            preparedStatement.setString(3, FileState.PAUSED.name());
+            preparedStatement.setString(1, FileState.QUEUED.name());
 
             int rowsAffected = preparedStatement.executeUpdate();
             if (rowsAffected > 0) {

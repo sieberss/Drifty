@@ -8,6 +8,7 @@ module Core {
     requires java.prefs;
     requires java.net.http;
     requires java.sql;
+    requires org.jetbrains.annotations;
     exports init;
     exports settings;
     exports properties;
