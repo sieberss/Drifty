@@ -1,5 +1,5 @@
 package properties;
 
 public enum FileState {
-    QUEUED, COMPLETED, FAILED, PAUSED
+    QUEUED, STARTED, COMPLETED, FAILED, PAUSED
 }
