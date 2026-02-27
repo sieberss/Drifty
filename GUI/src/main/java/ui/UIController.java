@@ -33,9 +33,9 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import main.Drifty_GUI;
 import properties.OS;
-import support.Job;
+import data.Job;
 import support.JobHistory;
-import support.Jobs;
+import data.JobQueue;
 import data.FileRepo;
 import utils.Utility;
 
@@ -71,7 +71,7 @@ public final class UIController {
     private String filename;
     private Folders folders;
     private Job selectedJob;
-    private Jobs jobs;
+    private JobQueue jobQueue;
 
     public static Scene getInfoScene() {
         return infoScene;
@@ -86,7 +86,7 @@ public final class UIController {
     */
     private UIController() {
         folders = new Folders();
-        jobs = JobService.getJobs();
+        jobQueue = JobService.getJobs();
     }
 
     /*
@@ -133,9 +133,9 @@ public final class UIController {
             String latestExecutableName = OS.isMac() ? "Drifty_GUI.pkg" : currentExecutableFile.getName();
             File latestExecutableFile = Paths.get(tmpFolder.getPath()).resolve(latestExecutableName).toFile();
             // Get the download queue already present in the application before adding the latest executable to it. This is done to ensure that the latest executable is downloaded first and alone.
-            ConcurrentLinkedDeque<Job> currentDownloadQueue = jobs.jobList();
+            ConcurrentLinkedDeque<Job> currentDownloadQueue = jobQueue.jobList();
             // Clear the download queue to download only the latest executable to prevent any other downloads from interfering with the update process.
-            jobs.clear();
+            jobQueue.clear();
 
             // Download the latest executable
             Job updateJob = new Job(Constants.updateURL.toString(), latestExecutableFile.getParent(), latestExecutableFile.getName(), Constants.updateURL.toString());
@@ -148,7 +148,7 @@ public final class UIController {
             setDir(previouslySelectedDir); // Reset the download folder to the one that was selected before the update was initiated.
             AppSettings.setLastDownloadFolder(previouslySelectedDir); // Reset the download folder to the one that was selected before the update was initiated.
             // Reset the download queue to the previous state.
-            jobs.setList(currentDownloadQueue);
+            jobQueue.setList(currentDownloadQueue);
             if (latestExecutableFile.exists() && latestExecutableFile.isFile() && latestExecutableFile.length() > 0) {
                 // If the latest executable was successfully downloaded, set the executable permission and execute the update.
                 GUIUpdateExecutor updateExecutor = new GUIUpdateExecutor(currentExecutableFile, latestExecutableFile);
@@ -431,10 +431,10 @@ public final class UIController {
                     }
                 }
             }));
-            if (jobs.notNull() && !jobs.isEmpty()) {
-                final int totalFiles = jobs.jobList().size();
+            if (jobQueue.notNull() && !jobQueue.isEmpty()) {
+                final int totalFiles = jobQueue.jobList().size();
                 int fileCount = 0;
-                LinkedList<Job> tempJobList = new LinkedList<>(jobs.jobList());
+                LinkedList<Job> tempJobList = new LinkedList<>(jobQueue.jobList());
                 for (Job job : tempJobList) {
                     fileCount++;
                     M.msgBatchInfo("Processing file " + fileCount + " of " + totalFiles + ": " + job);
@@ -477,7 +477,7 @@ public final class UIController {
     }
 
     private boolean linkInJobList(String link) {
-        for (Job job : jobs.jobList()) {
+        for (Job job : jobQueue.jobList()) {
             if (job.getSourceLink().equals(link)) {
                 return true;
             }
@@ -487,7 +487,7 @@ public final class UIController {
 
     private void addJob(Job newJob) {
         Job oldJob = null;
-        for (Job job : jobs.jobList()) {
+        for (Job job : jobQueue.jobList()) {
             if (job.matchesLink(newJob)) {
                 oldJob = job;
                 break;
@@ -505,7 +505,7 @@ public final class UIController {
                 M.msgLogError("Failed to update job in database: " + e.getMessage());
                 return;
             }
-            jobs.remove(oldJob);
+            jobQueue.remove(oldJob);
         } else {
             try {
                 FileRepo fileRepo = FileRepo.getInstance();
@@ -516,7 +516,7 @@ public final class UIController {
             }
             System.out.println("Job Added: " + newJob.getFilename());
         }
-        jobs.add(newJob);
+        jobQueue.add(newJob);
         commitJobListToListView();
     }
 
@@ -532,7 +532,7 @@ public final class UIController {
             M.msgLogError("Failed to remove job from database: " + e.getMessage());
             return;
         }
-        jobs.remove(oldJob);
+        jobQueue.remove(oldJob);
         commitJobListToListView();
         M.msgBatchInfo("Job Removed: " + oldJob.getSourceLink());
     }
@@ -576,7 +576,7 @@ public final class UIController {
             }
         });
         miClear.setOnAction(_ -> {
-            jobs.clear();
+            jobQueue.clear();
             commitJobListToListView();
             clearLink();
             clearFilename();
@@ -779,12 +779,12 @@ public final class UIController {
 
     private void commitJobListToListView() {
         Platform.runLater(() -> {
-            if (jobs.notNull()) {
-                if (jobs.isEmpty()) {
+            if (jobQueue.notNull()) {
+                if (jobQueue.isEmpty()) {
                     form.listView.getItems().clear();
                 } else {
                     // Assign the jobList to the ListView
-                    form.listView.getItems().setAll(jobs.jobList());
+                    form.listView.getItems().setAll(jobQueue.jobList());
                 }
             }
         });
@@ -888,7 +888,7 @@ public final class UIController {
     }
 
     private void getJobs() {
-        jobs = JobService.getJobs();
+        jobQueue = JobService.getJobs();
     }
 
     private JobHistory getHistory() {

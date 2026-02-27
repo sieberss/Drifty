@@ -6,7 +6,7 @@ import properties.FileState;
 import properties.LinkType;
 import properties.Program;
 import support.DownloadMetrics;
-import support.Job;
+import data.Job;
 import data.FileRepo;
 import utils.MessageBroker;
 

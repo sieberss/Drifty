@@ -17,4 +17,5 @@ module Core {
     exports utils;
     exports data;
     opens support to com.google.gson;
+    opens data to com.google.gson;
 }

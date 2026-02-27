@@ -2,7 +2,6 @@ package data;
 
 import properties.FileState;
 import properties.Program;
-import support.Job;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -79,7 +78,7 @@ public final class FileRepo {
             if (generatedKeys.next()) {
                 return generatedKeys.getInt(1);
             } else {
-                throw new SQLException("Failed to retrieve session ID.");
+                throw new SQLException("Failed to store session ID.");
             }
         }
     }
@@ -179,11 +178,11 @@ public final class FileRepo {
         }
     }
 
-    public Collection<Job> getCompletedJobs() throws SQLException {
+    public Collection<Job> getAllCompletedJobs() throws SQLException {
         return getJobsByState(FileState.COMPLETED);
     }
 
-    public Collection<Job> getQueuedJobs() throws SQLException {
+    public Collection<Job> getAllQueuedJobs() throws SQLException {
         return getJobsByState(FileState.QUEUED);
     }
 

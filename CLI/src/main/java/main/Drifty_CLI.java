@@ -15,7 +15,7 @@ import properties.MessageType;
 import properties.OS;
 import properties.Program;
 import support.DownloadConfiguration;
-import support.Job;
+import data.Job;
 import support.JobHistory;
 import updater.UpdateChecker;
 import utils.Logger;

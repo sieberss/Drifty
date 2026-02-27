@@ -14,7 +14,7 @@ import properties.LinkType;
 import properties.MessageCategory;
 import properties.Program;
 import support.DownloadMetrics;
-import support.Job;
+import data.Job;
 import ui.UIController;
 import data.FileRepo;
 import utils.UnitConverter;

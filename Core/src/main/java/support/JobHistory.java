@@ -1,5 +1,7 @@
 package support;
 
+import data.Job;
+
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 public class JobHistory {

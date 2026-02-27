@@ -1,11 +1,11 @@
-package support;
+package data;
 
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-public class Jobs {
+public class JobQueue {
     private ConcurrentLinkedDeque<Job> jobList;
 
-    public Jobs() {
+    public JobQueue() {
         this.jobList = new ConcurrentLinkedDeque<>();
     }
 

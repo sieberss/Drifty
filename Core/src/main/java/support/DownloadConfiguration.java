@@ -4,6 +4,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import data.Job;
+import data.JobQueue;
 import data.JobService;
 import init.Environment;
 import properties.LinkType;
@@ -236,9 +238,9 @@ public class DownloadConfiguration {
     }
 
     public void updateJobList() {
-        Jobs jobs = JobService.getJobs();
+        JobQueue jobQueue = JobService.getJobs();
         Map<Integer, Job> distinctJobList = new ConcurrentHashMap<>();
-        for (Job job : jobs.jobList()) {
+        for (Job job : jobQueue.jobList()) {
             distinctJobList.put(job.hashCode(), job);
         }
         if (fileData.isEmpty()) {
@@ -266,7 +268,7 @@ public class DownloadConfiguration {
                 throw new RuntimeException(e);
             }
         }
-        jobs.setList(new ConcurrentLinkedDeque<>(distinctJobList.values()));
+        jobQueue.setList(new ConcurrentLinkedDeque<>(distinctJobList.values()));
     }
 
     public String getLink() {

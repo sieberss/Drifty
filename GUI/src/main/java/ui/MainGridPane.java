@@ -12,7 +12,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import support.Job;
+import data.Job;
 
 import static gui.support.Constants.UI_COMPONENT_BUILDER_INSTANCE;
 

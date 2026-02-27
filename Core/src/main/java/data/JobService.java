@@ -1,9 +1,7 @@
 package data;
 
 import init.Environment;
-import support.Job;
 import support.JobHistory;
-import support.Jobs;
 
 import java.sql.SQLException;
 import java.util.Collection;
@@ -17,7 +15,7 @@ public class JobService {
         JobHistory jobHistory = new JobHistory();
         try {
             FileRepo fileRepo = FileRepo.getInstance();
-            Collection<Job> completedJobs = fileRepo.getCompletedJobs();
+            Collection<Job> completedJobs = fileRepo.getAllCompletedJobs();
 
             for (Job job : completedJobs) {
                 jobHistory.addJob(job, true);
@@ -28,18 +26,18 @@ public class JobService {
         return jobHistory;
     }
 
-    public static Jobs getJobs() {
-        Jobs jobs = new Jobs();
+    public static JobQueue getJobs() {
+        JobQueue jobQueue = new JobQueue();
         try {
             FileRepo fileRepo = FileRepo.getInstance();
-            Collection<Job> queuedJobs = fileRepo.getQueuedJobs();
+            Collection<Job> queuedJobs = fileRepo.getAllQueuedJobs();
 
             for (Job job : queuedJobs) {
-                jobs.add(job);
+                jobQueue.add(job);
             }
         } catch (SQLException e) {
             Environment.getMessageBroker().msgInitError("Could not load Jobs from database! SQLException! " + e.getMessage());
         }
-        return jobs;
+        return jobQueue;
     }
 }
