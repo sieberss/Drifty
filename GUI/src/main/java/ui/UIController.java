@@ -34,7 +34,6 @@ import javafx.stage.Stage;
 import main.Drifty_GUI;
 import properties.OS;
 import data.Job;
-import support.JobHistory;
 import data.JobQueue;
 import data.FileRepo;
 import utils.Utility;
@@ -337,8 +336,8 @@ public final class UIController {
             if (!linkInJobList(link)) {
                 M.msgLinkInfo("Validating link...");
                 if (Utility.isLinkValid(link)) {
-                    if (getHistory().exists(link)) {
-                        Job job = getHistory().getJob(link);
+                    if (JobService.getJobHistory().exists(link)) {
+                        Job job = JobService.getJobHistory().getJob(link);
                         String filename = job.getFilename();
                         dir = getDir();
                         if (dir == null) {
@@ -448,7 +447,7 @@ public final class UIController {
                         removeJobFromList(job);
                         setDownloadInfoColor(GREEN);
                         if (exitCode == 0) { // Success
-                            getHistory().addJob(job, false);
+                            JobService.getJobHistory().addJob(job, false);
                         }
                     }
                 }
@@ -624,7 +623,7 @@ public final class UIController {
         /*
         Called from the Edit menu, this wipes out the job history which is stored in the users file system
          */
-        INSTANCE.getHistory().clear();
+        JobService.getJobHistory().clear();
         try {
             FileRepo fileRepo = FileRepo.getInstance();
             fileRepo.deleteFilesHistory();
@@ -889,10 +888,6 @@ public final class UIController {
 
     private void getJobs() {
         jobQueue = JobService.getJobs();
-    }
-
-    private JobHistory getHistory() {
-        return JobService.getJobHistory();
     }
 
     private void selectJob(Job job) {
