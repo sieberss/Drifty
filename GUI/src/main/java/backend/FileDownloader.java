@@ -64,7 +64,7 @@ public class FileDownloader extends Task<Integer> {
         this.job = job;
         this.downloadLink = job.getDownloadLink();
         this.filename = Utility.cleanFilename(job.getFilename());
-        this.dir = job.getDir();
+        this.dir = job.getLocalDirectory();
         if (this.downloadLink == null && LinkType.getLinkType(job.getSourceLink()).equals(LinkType.SPOTIFY)) {
             sendFinalMessage("Song is exclusive to Spotify and cannot be downloaded!");
         }
@@ -99,7 +99,7 @@ public class FileDownloader extends Task<Integer> {
             String endDownloadingTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
             db.updateFileInfoByName(
                     job.getSourceLink(),
-                    job.getDir(),
+                    job.getLocalDirectory(),
                     job.getFilename(),
                     FileState.COMPLETED,
                     startDownloadingTime,
@@ -234,7 +234,7 @@ public class FileDownloader extends Task<Integer> {
     private void splitDownload() {
         String message = "";
         URL url = null;
-        String path = job.getFile().getAbsolutePath();
+        String path = job.getLocalFile().getAbsolutePath();
         try {
             int numParts = new DownloadMetrics().getThreadCount();
             url = new URI(downloadLink).toURL();
@@ -289,7 +289,7 @@ public class FileDownloader extends Task<Integer> {
             updateProgress(0.0, 1.0);
             updateMessage("Merging Files");
             String msg = "Saving file to download folder";
-            FileOutputStream fos = new FileOutputStream(job.getFile());
+            FileOutputStream fos = new FileOutputStream(job.getLocalFile());
             long position = 0;
             for (int i = 0; i < numParts; i++) {
                 updateMessage(msg);

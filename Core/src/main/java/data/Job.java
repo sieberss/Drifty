@@ -5,61 +5,61 @@ import java.nio.file.Paths;
 import java.util.Objects;
 
 public class Job {
-    private final String link;
-    private final String dir;
+    private final String sourceLink;
+    private final String localDirectory;
     private final String filename;
     private final String downloadLink;
 
-    public Job(String link, String dir, String filename, String downloadLink) {
-        this.link = link;
+    public Job(String sourceLink, String localDirectory, String filename, String downloadLink) {
+        this.sourceLink = sourceLink;
         this.downloadLink = downloadLink;
-        this.dir = dir;
+        this.localDirectory = localDirectory;
         this.filename = filename;
     }
 
-    public boolean matchesLink(Job job) {
-        return job.getSourceLink().equals(link);
+    public boolean sourceLinkEquals(Job job) {
+        return job.getSourceLink().equals(sourceLink);
     }
 
-    public boolean matchesLink(String link) {
-        return this.link.equals(link);
+    public boolean sourceLinkEquals(String link) {
+        return this.sourceLink.equals(link);
     }
 
     public String getSourceLink() {
-        return link;
+        return sourceLink;
     }
 
     public String getDownloadLink() {
         if (downloadLink != null) {
             return downloadLink;
         }
-        if (link != null) {
-            return link;
+        if (sourceLink != null) {
+            return sourceLink;
         }
         throw new IllegalStateException("Both link and downloadLink are null");
     }
 
-    public String getDir() {
-        return dir;
+    public String getLocalDirectory() {
+        return localDirectory;
     }
 
     public String getFilename() {
         return filename;
     }
 
-    public File getFile() {
-        return Paths.get(dir).resolve(filename).toFile();
+    public File getLocalFile() {
+        return Paths.get(localDirectory).resolve(filename).toFile();
     }
 
-    public boolean fileExists() {
-        return getFile().exists();
+    public boolean localFileExists() {
+        return getLocalFile().exists();
     }
 
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Job job) {
-            return Objects.equals(job.getSourceLink(), link) &&
-                    Objects.equals(job.getDir(), dir) &&
+            return Objects.equals(job.getSourceLink(), sourceLink) &&
+                    Objects.equals(job.getLocalDirectory(), localDirectory) &&
                     Objects.equals(job.getFilename(), filename);
         }
         return false;
@@ -67,7 +67,7 @@ public class Job {
 
     @Override
     public int hashCode() {
-        return Objects.hash(link, dir, filename);
+        return Objects.hash(sourceLink, localDirectory, filename);
     }
 
     @Override

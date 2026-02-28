@@ -42,7 +42,7 @@ public class FileDownloader implements Runnable {
     public FileDownloader(Job job) {
         this.job = job;
         this.linkType = LinkType.getLinkType(job.getDownloadLink());
-        this.directoryPath = Paths.get(job.getDir()).toAbsolutePath();
+        this.directoryPath = Paths.get(job.getLocalDirectory()).toAbsolutePath();
         this.downloadMetrics = new DownloadMetrics();
         this.numberOfThreads = downloadMetrics.getThreadCount();
         this.threadMaxDataSize = downloadMetrics.getMultiThreadingThreshold();
@@ -81,7 +81,7 @@ public class FileDownloader implements Runnable {
                             downloaderThreads.add(downloader);
                             tempFiles.add(file);
                         }
-                        ProgressBarThread progressBarThread = new ProgressBarThread(fileOutputStreams, partSizes, fileName, job.getDir(), totalSize, downloadMetrics);
+                        ProgressBarThread progressBarThread = new ProgressBarThread(fileOutputStreams, partSizes, fileName, job.getLocalDirectory(), totalSize, downloadMetrics);
                         progressBarThread.start();
                         M.msgDownloadInfo(String.format(DOWNLOADING_F, fileName));
                         // check if all the files are downloaded
@@ -95,7 +95,7 @@ public class FileDownloader implements Runnable {
                         InputStream urlStream = url.openStream();
                         readableByteChannel = Channels.newChannel(urlStream);
                         FileOutputStream fos = new FileOutputStream(directoryPath.resolve(fileName).toFile());
-                        ProgressBarThread progressBarThread = new ProgressBarThread(fos, totalSize, fileName, job.getDir(), downloadMetrics);
+                        ProgressBarThread progressBarThread = new ProgressBarThread(fos, totalSize, fileName, job.getLocalDirectory(), downloadMetrics);
                         progressBarThread.start();
                         M.msgDownloadInfo(String.format(DOWNLOADING_F, fileName));
                         fos.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
@@ -135,7 +135,7 @@ public class FileDownloader implements Runnable {
 
     private void downloadYoutubeOrInstagram(boolean isSpotifySong) {
         String fileName = job.getFilename();
-        String[] fullCommand = new String[]{Program.get(Program.YT_DLP), "--quiet", "--progress", "-P", job.getDir(), job.getDownloadLink(), "-o", fileName, "-f", (isSpotifySong ? "bestaudio" : "mp4")};
+        String[] fullCommand = new String[]{Program.get(Program.YT_DLP), "--quiet", "--progress", "-P", job.getLocalDirectory(), job.getDownloadLink(), "-o", fileName, "-f", (isSpotifySong ? "bestaudio" : "mp4")};
         ProcessBuilder processBuilder = new ProcessBuilder(fullCommand);
         processBuilder.inheritIO();
         M.msgDownloadInfo(String.format(DOWNLOADING_F, fileName));

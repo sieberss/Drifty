@@ -629,13 +629,13 @@ public class Drifty_CLI {
     }
 
     private static void checkHistoryAndDownload(Job job) {
-        boolean doesFileExist = job.fileExists();
+        boolean doesFileExist = job.localFileExists();
         boolean hasHistory = jobHistory.exists(link);
         boolean fileExistsHasHistory = doesFileExist && hasHistory;
         boolean fileExistsNoHistory = doesFileExist && !hasHistory;
         if (fileExistsNoHistory) {
             fileName = Utility.renameFile(fileName, downloadsFolder);
-            messageBroker.msgHistoryWarning(String.format(MSG_FILE_EXISTS_NO_HISTORY + "\n", job.getFilename(), job.getDir(), fileName), false);
+            messageBroker.msgHistoryWarning(String.format(MSG_FILE_EXISTS_NO_HISTORY + "\n", job.getFilename(), job.getLocalDirectory(), fileName), false);
             renameFilenameIfRequired();
             if (link != null) {
                 job = new Job(link, downloadsFolder, fileName, job.getDownloadLink());
@@ -644,9 +644,9 @@ public class Drifty_CLI {
                 downloader.run();
             }
         } else if (fileExistsHasHistory) {
-            messageBroker.msgHistoryWarning(String.format(MSG_FILE_EXISTS_HAS_HISTORY, job.getFilename(), job.getDir()), false);
+            messageBroker.msgHistoryWarning(String.format(MSG_FILE_EXISTS_HAS_HISTORY, job.getFilename(), job.getLocalDirectory()), false);
             String choiceString = SC.nextLine().toLowerCase();
-            boolean choice = utility.yesNoValidation(choiceString, String.format(MSG_FILE_EXISTS_HAS_HISTORY, job.getFilename(), job.getDir()), true);
+            boolean choice = utility.yesNoValidation(choiceString, String.format(MSG_FILE_EXISTS_HAS_HISTORY, job.getFilename(), job.getLocalDirectory()), true);
             if (choice) {
                 fileName = Utility.renameFile(fileName, downloadsFolder);
                 messageBroker.msgFilenameInfo("New file name : " + fileName);

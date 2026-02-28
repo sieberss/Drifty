@@ -28,7 +28,7 @@ public class JobQueue {
     public void remove(Job oldJob) {
         Job removeJob = oldJob;
         for (Job job : jobList) {
-            if (job.matchesLink(oldJob)) {
+            if (job.sourceLinkEquals(oldJob)) {
                 removeJob = job;
                 break;
             }

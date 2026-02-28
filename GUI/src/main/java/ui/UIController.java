@@ -252,7 +252,7 @@ public final class UIController {
                     if (job != null) {
                         selectJob(job);
                         setLink(job.getSourceLink());
-                        setDir(job.getDir());
+                        setDir(job.getLocalDirectory());
                         setFilename(job.getFilename());
                     }
                 }
@@ -487,7 +487,7 @@ public final class UIController {
     private void addJob(Job newJob) {
         Job oldJob = null;
         for (Job job : jobQueue.jobList()) {
-            if (job.matchesLink(newJob)) {
+            if (job.sourceLinkEquals(newJob)) {
                 oldJob = job;
                 break;
             }
@@ -498,7 +498,7 @@ public final class UIController {
                 fileRepo.updateQueuedFileByName(
                         newJob.getFilename(),
                         oldJob.getSourceLink(),
-                        newJob.getDir()
+                        newJob.getLocalDirectory()
                 );
             } catch (SQLException e) {
                 M.msgLogError("Failed to update job in database: " + e.getMessage());
@@ -524,7 +524,7 @@ public final class UIController {
             FileRepo fileRepo = FileRepo.getInstance();
             fileRepo.deleteQueuedFileByName(
                     oldJob.getSourceLink(),
-                    oldJob.getDir(),
+                    oldJob.getLocalDirectory(),
                     oldJob.getFilename()
             );
         } catch (SQLException e) {

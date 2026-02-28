@@ -16,7 +16,7 @@ public class JobHistory {
             jobHistoryList.addLast(newJob);
         } else {
             for (Job job : jobHistoryList) {
-                if (job.matchesLink(newJob)) {
+                if (job.sourceLinkEquals(newJob)) {
                     return;
                 }
             }
@@ -39,7 +39,7 @@ public class JobHistory {
 
     public Job getJob(String link) {
         for (Job job : jobHistoryList) {
-            if (job.matchesLink(link)) {
+            if (job.sourceLinkEquals(link)) {
                 return job;
             }
         }

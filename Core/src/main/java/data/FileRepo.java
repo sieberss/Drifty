@@ -98,7 +98,7 @@ public final class FileRepo {
             preparedStatement.setString(1, job.getFilename());
             preparedStatement.setString(2, job.getSourceLink());
             preparedStatement.setString(3, job.getDownloadLink());
-            preparedStatement.setString(4, job.getDir());
+            preparedStatement.setString(4, job.getLocalDirectory());
             preparedStatement.setString(5, FileState.QUEUED.name());
             preparedStatement.setInt(6, sessionId);
             preparedStatement.executeUpdate();
@@ -118,7 +118,7 @@ public final class FileRepo {
             preparedStatement.setString(1, job.getFilename());
             preparedStatement.setString(2, job.getSourceLink());
             preparedStatement.setString(3, job.getDownloadLink());
-            preparedStatement.setString(4, job.getDir());
+            preparedStatement.setString(4, job.getLocalDirectory());
             preparedStatement.setString(5, startDownloadingTime);
             preparedStatement.setString(6, FileState.STARTED.name());
             preparedStatement.setInt(7, sessionId);
