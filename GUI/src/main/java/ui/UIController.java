@@ -3,6 +3,8 @@ package ui;
 import backend.FileDownloader;
 import data.JobService;
 import gui.init.Environment;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 import settings.AppSettings;
 import gui.support.Constants;
 import gui.support.Folders;
@@ -91,17 +93,19 @@ public final class UIController {
     Methods for initializing the various controls that are on the form - MainGridPane
      */
     private void start(MainGridPane pane) {
-        new Thread(() -> {
-            if (AppSettings.isDriftyUpdateAvailable()) {
-                M.msgLogInfo("A new version of Drifty is available!");
-                showUpdateDialog();
-            }
-        }).start();
+        new Thread(this::checkForUpdate).start();
         form = pane;
         setControlProperties();
         setControlActions();
         form.tfLink.requestFocus();
         commitJobListToListView();
+    }
+
+    private void checkForUpdate() {
+        if (AppSettings.isDriftyUpdateAvailable()) {
+            M.msgLogInfo("A new version of Drifty is available!");
+            showUpdateDialog();
+        }
     }
 
     public void showUpdateDialog() {
@@ -137,7 +141,7 @@ public final class UIController {
             // Download the latest executable
             Job updateJob = new Job(Constants.updateURL.toString(), latestExecutableFile.getParent(), latestExecutableFile.getName(), Constants.updateURL.toString());
             addJob(updateJob);
-            Thread downloadUpdate = new Thread(batchDownloader());
+            Thread downloadUpdate = new Thread(getBatchDownloaderRunnable());
             downloadUpdate.start();
             while (!downloadUpdate.getState().equals(Thread.State.TERMINATED)) {
                 sleep(500);
@@ -187,117 +191,130 @@ public final class UIController {
         Tooltip.install(form.tfFilename, new Tooltip("If the filename you enter already exists in the download folder, it will" + nl + "automatically be renamed to avoid file over-writes."));
         Tooltip.install(form.tfDir, new Tooltip("Right click anywhere to add a new download folder." + nl + "Drifty will accumulate a list of download folders" + nl + "so that duplicate downloads can be detected."));
         form.cbAutoPaste.setSelected(AppSettings.isGuiAutoPasteEnabled());
-        form.tfDir.textProperty().addListener(((_, oldValue, newValue) -> {
-            if (!newValue.equals(oldValue)) {
-                DIRECTORY_EXISTS.setValue(false);
-                if (newValue.isEmpty()) {
-                    M.msgDirError("Directory cannot be empty!");
-                } else {
-                    File folder = new File(newValue);
-                    if (folder.exists() && folder.isDirectory()) {
-                        delayFolderSave(newValue, folder);
-                        M.msgDirInfo("Directory exists!");
-                        DIRECTORY_EXISTS.setValue(true);
-                    } else {
-                        M.msgDirError("Directory does not exist or is not a directory!");
-                    }
-                }
-            }
-        }));
+        form.tfDir.textProperty().addListener(
+                (_, oldValue, newValue) -> directoryFieldChanged(oldValue, newValue));
         setDirContextMenu();
     }
 
-    private void setControlActions() {
-        form.btnSave.setOnAction(_ -> new Thread(() -> {
-            UPDATING_BATCH.setValue(true);
-            String link = getLink();
-            filename = getFilename();
-            String dir = getDir();
-            if (Paths.get(dir, filename).toFile().exists()) {
-                ConfirmationDialog ask = new ConfirmationDialog("Overwrite Existing File", "This will overwrite the existing file" + nl.repeat(2) + "Is this what you want to do?");
-                if (ask.getResponse().isNo()) {
-                    filename = renameFile(filename, dir);
-                }
-            }
-            addJob(new Job(link, dir, filename, selectedJob.getDownloadLink()));
-            clearLink();
-            clearFilename();
-            setDir(folders.getDownloadFolder());
-            UPDATING_BATCH.setValue(false);
-        }).start());
-        form.btnStart.setOnAction(_ -> new Thread(() -> {
-            if (PROCESSING_BATCH.getValue().equals(true)) {
-                return;
-            }
-            if (!form.listView.getItems().isEmpty() && PROCESSING_BATCH.getValue().equals(false)) {
-                clearLink();
-                clearFilename();
-                clearFilenameOutput();
-                new Thread(batchDownloader()).start();
-            }
-        }).start());
-        form.tfDir.setOnAction(_ -> updateBatch());
-        form.tfFilename.setOnAction(_ -> updateBatch());
-        form.tfLink.setOnKeyTyped(_ -> processLink());
-        form.listView.setOnMouseClicked(e -> {
-            if (e.getButton().equals(MouseButton.PRIMARY) && e.getClickCount() == 1) {
-                if (UPDATING_BATCH.getValue().equals(true)) {
-                    clearControls();
-                    setDir(folders.getDownloadFolder());
-                    UPDATING_BATCH.setValue(false);
+    private void directoryFieldChanged(String oldValue, String newValue) {
+        if (!newValue.equals(oldValue)) {
+            DIRECTORY_EXISTS.setValue(false);
+            if (newValue.isEmpty()) {
+                M.msgDirError("Directory cannot be empty!");
+            } else {
+                File folder = new File(newValue);
+                if (folder.exists() && folder.isDirectory()) {
+                    delayFolderSave(newValue, folder);
+                    M.msgDirInfo("Directory exists!");
+                    DIRECTORY_EXISTS.setValue(true);
                 } else {
-                    Job job = form.listView.getSelectionModel().getSelectedItem();
-                    if (job != null) {
-                        selectJob(job);
-                        setLink(job.getSourceLink());
-                        setDir(job.getDir());
-                        setFilename(job.getFilename());
-                    }
+                    M.msgDirError("Directory does not exist or is not a directory!");
                 }
             }
-        });
-        form.listView.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.DELETE) {
-                Job job = form.listView.getSelectionModel().getSelectedItem();
-                if (job != null) {
-                    removeJobFromList(job);
-                    clearControls();
-                    UPDATING_BATCH.setValue(false);
-                }
-            }
-        });
+        }
     }
 
-    private void processLink() {
-        new Thread(() -> {
-            String first = getLink();
-            sleep(1000);
-            String userText = getLink();
-            if (userText.equals(first)) {
-                if (userText.contains("  ") || userText.contains(System.lineSeparator())) {
-                    M.msgLinkError("Link should not contain whitespace characters!");
-                    clearLink();
-                    return;
-                }
-                String[] links;
-                if (userText.contains(" ")) {
-                    links = userText.trim().split(" ");
-                } else {
-                    links = new String[]{userText};
-                }
-                VERIFYING_LINKS.setValue(true);
-                for (String link : links) {
-                    verifyLinksAndWaitFor(link);
-                }
-                VERIFYING_LINKS.setValue(false);
-                clearLink();
-                clearFilename();
+    private void setControlActions() {
+        form.btnSave.setOnAction(_ -> new Thread(this::handleSaveClick).start());
+        form.btnStart.setOnAction(_ -> new Thread(this::handleStartClick).start());
+        form.tfDir.setOnAction(_ -> updateBatch());
+        form.tfFilename.setOnAction(_ -> updateBatch());
+        form.tfLink.setOnKeyTyped(_ -> startLinkProcessThread());
+        form.listView.setOnMouseClicked(this::handleListViewClick);
+        form.listView.setOnKeyPressed(this::handleListViewKey);
+    }
+
+    private void handleListViewKey(KeyEvent e) {
+        if (e.getCode() == KeyCode.DELETE) {
+            Job job = form.listView.getSelectionModel().getSelectedItem();
+            if (job != null) {
+                removeJobFromList(job);
+                clearControls();
+                UPDATING_BATCH.setValue(false);
             }
-        }).start();
+        }
+    }
+
+    private void handleListViewClick(MouseEvent e) {
+        if (e.getButton().equals(MouseButton.PRIMARY) && e.getClickCount() == 1) {
+            if (UPDATING_BATCH.getValue().equals(true)) {
+                clearControls();
+                setDir(folders.getDownloadFolder());
+                UPDATING_BATCH.setValue(false);
+            } else {
+                Job job = form.listView.getSelectionModel().getSelectedItem();
+                if (job != null) {
+                    selectJob(job);
+                    setLink(job.getSourceLink());
+                    setDir(job.getDir());
+                    setFilename(job.getFilename());
+                }
+            }
+        }
+    }
+
+    private void handleStartClick() {
+        if (PROCESSING_BATCH.getValue().equals(true)) {
+            return;
+        }
+        if (!form.listView.getItems().isEmpty() && PROCESSING_BATCH.getValue().equals(false)) {
+            clearLink();
+            clearFilename();
+            clearFilenameOutput();
+            new Thread(getBatchDownloaderRunnable()).start();
+        }
+    }
+
+    private void handleSaveClick() {
+        UPDATING_BATCH.setValue(true);
+        String link = getLink();
+        filename = getFilename();
+        String dir = getDir();
+        if (Paths.get(dir, filename).toFile().exists()) {
+            ConfirmationDialog ask = new ConfirmationDialog("Overwrite Existing File", "This will overwrite the existing file" + nl.repeat(2) + "Is this what you want to do?");
+            if (ask.getResponse().isNo()) {
+                filename = renameFile(filename, dir);
+            }
+        }
+        addJob(new Job(link, dir, filename, selectedJob.getDownloadLink()));
+        clearLink();
+        clearFilename();
+        setDir(folders.getDownloadFolder());
+        UPDATING_BATCH.setValue(false);
+    }
+
+    private void startLinkProcessThread() {
+        new Thread(this::doLinkProcess).start();
+    }
+
+    private void doLinkProcess() {
+        String first = getLink();
+        sleep(1000);
+        String userText = getLink();
+        if (userText.equals(first)) {
+            if (userText.contains("  ") || userText.contains(System.lineSeparator())) {
+                M.msgLinkError("Link should not contain whitespace characters!");
+                clearLink();
+                return;
+            }
+            String[] links;
+            if (userText.contains(" ")) {
+                links = userText.trim().split(" ");
+            } else {
+                links = new String[]{userText};
+            }
+            VERIFYING_LINKS.setValue(true);
+            for (String link : links) {
+                verifyLinksAndWaitFor(link);
+            }
+            VERIFYING_LINKS.setValue(false);
+            clearLink();
+            clearFilename();
+        }
     }
 
     private void verifyLinksAndWaitFor(String link) {
-        Thread verify = new Thread(verifyLink(link));
+        Thread verify = new Thread(getLinkVerificationRunnable(link));
         verify.start();
         while (!verify.getState().equals(Thread.State.TERMINATED)) {
             sleep(500);
@@ -311,7 +328,7 @@ public final class UIController {
     Runnables are used to prevent the form from pin-wheeling (Macs) or hour-glassing(others) so that the appearance
     application freeze never happens. Runnables are assigned to Tasks.
      */
-    private Runnable verifyLink(String link) {
+    private Runnable getLinkVerificationRunnable(String link) {
         /*
         This method is called when the user pastes a link into the Link field. It checks the link to see if it is valid.
 
@@ -326,137 +343,157 @@ public final class UIController {
         Also, they can press the DELETE key to remove the selected job from the list.
          */
         return () -> {
-            if (link.isEmpty()) {
-                return;
-            }
-            String message;
-            String dir;
-            if (!linkInJobList(link)) {
-                M.msgLinkInfo("Validating link...");
-                if (Utility.isLinkValid(link)) {
-                    if (getHistory().exists(link)) {
-                        Job job = getHistory().getJob(link);
-                        String filename = job.getFilename();
-                        dir = getDir();
-                        if (dir == null) {
-                            M.msgDirError("Download folder is not set!");
-                            Environment.terminate(1);
-                        }
-                        String intro = "You have downloaded this link before. The filename is:" + nl + filename + nl.repeat(2);
-                        String folder = fileExists(filename);
-                        String windowTitle;
-                        if (!folder.isEmpty()) {
-                            message = intro + "The file already exists in the selected download folder:" + nl + folder + nl.repeat(2) + "Choose 'YES' to download and automatically rename the file to avoid overwriting the existing one. Alternatively, you can manually change the filename below to your preference." + nl.repeat(2) + "Choose 'NO' if you do not wish to download the file again.";
-                            windowTitle = "File Already Exists";
-                        } else {
-                            message = intro + "The file does not exist in any of your designated download folders." + nl.repeat(2) + "This is a good opportunity to download it without concerns of duplicating existing files. Click 'YES' to proceed with the download, or 'NO' if you decide not to download.";
-                            windowTitle = "File Already Downloaded";
-                        }
-                        ConfirmationDialog ask = new ConfirmationDialog(windowTitle, message, renameFile(filename, dir));
-                        if (ask.getResponse().isYes()) {
-                            filename = ask.getFilename();
-                            downloadConfig = new GUIDownloadConfiguration(link, dir, filename);
-                        }
+            doLinkVerification(link);
+        };
+    }
+
+    private void doLinkVerification(String link) {
+        if (link.isEmpty()) {
+            return;
+        }
+        String message;
+        String dir;
+        if (!linkInJobList(link)) {
+            M.msgLinkInfo("Validating link...");
+            if (Utility.isLinkValid(link)) {
+                if (getHistory().exists(link)) {
+                    Job job = getHistory().getJob(link);
+                    String filename = job.getFilename();
+                    dir = getDir();
+                    if (dir == null) {
+                        M.msgDirError("Download folder is not set!");
+                        Environment.terminate(1);
+                    }
+                    String intro = "You have downloaded this link before. The filename is:" + nl + filename + nl.repeat(2);
+                    String folder = fileExists(filename);
+                    String windowTitle;
+                    if (!folder.isEmpty()) {
+                        message = intro + "The file already exists in the selected download folder:" + nl + folder + nl.repeat(2) + "Choose 'YES' to download and automatically rename the file to avoid overwriting the existing one. Alternatively, you can manually change the filename below to your preference." + nl.repeat(2) + "Choose 'NO' if you do not wish to download the file again.";
+                        windowTitle = "File Already Exists";
                     } else {
-                        downloadConfig = new GUIDownloadConfiguration(link, getDir(), null); // Filename is null because it will be retrieved from the link
+                        message = intro + "The file does not exist in any of your designated download folders." + nl.repeat(2) + "This is a good opportunity to download it without concerns of duplicating existing files. Click 'YES' to proceed with the download, or 'NO' if you decide not to download.";
+                        windowTitle = "File Already Downloaded";
                     }
-                    downloadConfig.sanitizeLink();
-                    ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-                    executor.scheduleWithFixedDelay(this::commitJobListToListView, 0, 100, TimeUnit.MILLISECONDS);
-                    Thread getNames = new Thread(getFilenames(downloadConfig));
-                    getNames.start();
-                    while (!getNames.getState().equals(Thread.State.TERMINATED)) {
-                        sleep(150);
+                    ConfirmationDialog ask = new ConfirmationDialog(windowTitle, message, renameFile(filename, dir));
+                    if (ask.getResponse().isYes()) {
+                        filename = ask.getFilename();
+                        downloadConfig = new GUIDownloadConfiguration(link, dir, filename);
                     }
-                    executor.shutdown();
+                } else {
+                    downloadConfig = new GUIDownloadConfiguration(link, getDir(), null); // Filename is null because it will be retrieved from the link
                 }
-                clearFilename();
-                clearLink();
-                clearLinkOutput();
-                clearFilenameOutput();
-            } else {
-                M.msgLinkError("Link already in job list");
-                clearLink();
-                UPDATING_BATCH.setValue(false);
-            }
-        };
-    }
-
-    private Runnable getFilenames(GUIDownloadConfiguration config) {
-        return () -> {
-            // Using a Worker Task, this method calls the FileMetadataRetriever class to retrieve all the required metadata for the file(s) to be downloaded and adds them to the jobList.
-            Task<Void> task = new FileMetadataRetriever(config);
-            Platform.runLater(() -> {
-                /*
-                These bindings allow the Worker thread to post relevant information to the UI, including the progress bar which
-                accurately depicts the remaining number of filenames to extract from the link. However, if there is only one filename
-                to extract, the progress bar goes through a static animation to indicate that the program is not frozen.
-                The controls that are bound to the thread cannot have their text updated while they are bound, or else an error will be thrown and possibly the program execution halted.
-                */
-                form.lblDownloadInfo.textProperty().bind(task.messageProperty());
-                form.pBar.progressProperty().bind(task.progressProperty());
-            });
-            setLink(config.getLink());
-            Thread retrieveFileData = new Thread(task);
-            retrieveFileData.setDaemon(true);
-            retrieveFileData.start();
-            sleep(2000);
-            form.lblDownloadInfo.setTextFill(GREEN);
-            while (!retrieveFileData.getState().equals(Thread.State.TERMINATED) && !retrieveFileData.getState().equals(Thread.State.BLOCKED)) {
-                sleep(50);
-            }
-            sleep(500);
-            clearControls();
-        };
-    }
-
-    private Runnable batchDownloader() {
-        return () -> {
-            PROCESSING_BATCH.setValue(true);
-            UPDATING_BATCH.setValue(false);
-            form.lblDownloadInfo.setTextFill(GREEN);
-            IntegerProperty speedValueProperty = new SimpleIntegerProperty();
-            speedValueProperty.addListener(((_, oldValue, newValue) -> {
-                if (!oldValue.equals(newValue)) {
-                    speedValue += (int) newValue;
-                    speedValueUpdateCount++;
-                    if (speedValueUpdateCount == 5) {
-                        int speed = speedValue / 5;
-                        speedValueUpdateCount = 0;
-                        speedValue = 0;
-                        setFilenameOutput(GREEN, "Speed: " + speed + " KB/s");
-                    }
+                downloadConfig.sanitizeLink();
+                ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+                executor.scheduleWithFixedDelay(this::commitJobListToListView, 0, 100, TimeUnit.MILLISECONDS);
+                Thread getNames = new Thread(getFilenameGettingRunnable(downloadConfig));
+                getNames.start();
+                while (!getNames.getState().equals(Thread.State.TERMINATED)) {
+                    sleep(150);
                 }
-            }));
-            Jobs jobs = getJobs();
-            if (jobs.notNull() && !jobs.isEmpty()) {
-                final int totalFiles = jobs.jobList().size();
-                int fileCount = 0;
-                LinkedList<Job> tempJobList = new LinkedList<>(jobs.jobList());
-                for (Job job : tempJobList) {
-                    fileCount++;
-                    M.msgBatchInfo("Processing file " + fileCount + " of " + totalFiles + ": " + job);
-                    FileDownloader downloadFile = new FileDownloader(job, form.tfLink.textProperty(), form.tfDir.textProperty(), form.tfFilename.textProperty(), form.lblDownloadInfo.textProperty(), speedValueProperty, form.pBar.progressProperty());
-                    try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
-                        executor.submit(downloadFile);
-                        while (downloadFile.notDone()) {
-                            sleep(500);
-                        }
-                        int exitCode = downloadFile.getExitCode();
-                        removeJobFromList(job);
-                        setDownloadInfoColor(GREEN);
-                        if (exitCode == 0) { // Success
-                            getHistory().addJob(job, false);
-                        }
-                    }
-                }
+                executor.shutdown();
             }
+            clearFilename();
             clearLink();
             clearLinkOutput();
-            clearFilename();
             clearFilenameOutput();
-            PROCESSING_BATCH.setValue(false);
-        };
+        } else {
+            M.msgLinkError("Link already in job list");
+            clearLink();
+            UPDATING_BATCH.setValue(false);
+        }
+    }
+
+    private Runnable getFilenameGettingRunnable(GUIDownloadConfiguration config) {
+        return () -> doFilenameGetting(config);
+
+    }
+
+    private void doFilenameGetting(GUIDownloadConfiguration config) {
+        // Using a Worker Task, this method calls the FileMetadataRetriever class to retrieve all the required metadata for the file(s) to be downloaded and adds them to the jobList.
+        Task<Void> task = new FileMetadataRetriever(config);
+        Platform.runLater(() -> {
+            /*
+            These bindings allow the Worker thread to post relevant information to the UI, including the progress bar which
+            accurately depicts the remaining number of filenames to extract from the link. However, if there is only one filename
+            to extract, the progress bar goes through a static animation to indicate that the program is not frozen.
+            The controls that are bound to the thread cannot have their text updated while they are bound, or else an error will be thrown and possibly the program execution halted.
+            */
+            form.lblDownloadInfo.textProperty().bind(task.messageProperty());
+            form.pBar.progressProperty().bind(task.progressProperty());
+        });
+        setLink(config.getLink());
+        Thread retrieveFileData = new Thread(task);
+        retrieveFileData.setDaemon(true);
+        retrieveFileData.start();
+        sleep(2000);
+        form.lblDownloadInfo.setTextFill(GREEN);
+        while (!retrieveFileData.getState().equals(Thread.State.TERMINATED) && !retrieveFileData.getState().equals(Thread.State.BLOCKED)) {
+            sleep(50);
+        }
+        sleep(500);
+        clearControls();
+    }
+
+    private Runnable getBatchDownloaderRunnable() {
+        return this::doBatchDownload;
+    }
+
+    private void doBatchDownload() {
+        PROCESSING_BATCH.setValue(true);
+        UPDATING_BATCH.setValue(false);
+        form.lblDownloadInfo.setTextFill(GREEN);
+        IntegerProperty speedValueProperty = new SimpleIntegerProperty();
+        speedValueProperty.addListener(
+                (_, oldValue, newValue) -> speedValueChanged(oldValue, newValue));
+        Jobs jobs = getJobs();
+        if (jobs.notNull() && !jobs.isEmpty()) {
+            executeJobs(jobs, speedValueProperty);
+        }
+        clearLink();
+        clearLinkOutput();
+        clearFilename();
+        clearFilenameOutput();
+        PROCESSING_BATCH.setValue(false);
+    }
+
+    private void executeJobs(Jobs jobs, IntegerProperty speedValueProperty) {
+        final int totalFiles = jobs.jobList().size();
+        int fileCount = 0;
+        LinkedList<Job> tempJobList = new LinkedList<>(jobs.jobList());
+        for (Job job : tempJobList) {
+            fileCount++;
+            M.msgBatchInfo("Processing file " + fileCount + " of " + totalFiles + ": " + job);
+            FileDownloader fileDownloader = new FileDownloader(job, form.tfLink.textProperty(), form.tfDir.textProperty(), form.tfFilename.textProperty(), form.lblDownloadInfo.textProperty(), speedValueProperty, form.pBar.progressProperty());
+            executeSingleDownload(job, fileDownloader);
+        }
+    }
+
+    private void executeSingleDownload(Job job, FileDownloader fileDownloader) {
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            executor.submit(fileDownloader);
+            while (fileDownloader.notDone()) {
+                sleep(500);
+            }
+            int exitCode = fileDownloader.getExitCode();
+            removeJobFromList(job);
+            setDownloadInfoColor(GREEN);
+            if (exitCode == 0) { // Success
+                getHistory().addJob(job, false);
+            }
+        }
+    }
+
+    private void speedValueChanged(Number oldValue, Number newValue) {
+        if (!oldValue.equals(newValue)) {
+            speedValue += (int) newValue;
+            speedValueUpdateCount++;
+            if (speedValueUpdateCount == 5) {
+                int speed = speedValue / 5;
+                speedValueUpdateCount = 0;
+                speedValue = 0;
+                setFilenameOutput(GREEN, "Speed: " + speed + " KB/s");
+            }
+        }
     }
 
     private String fileExists(String filename) {
@@ -572,26 +609,30 @@ public final class UIController {
         MenuItem miClear = new MenuItem("Clear");
         MenuItem miHelp = new MenuItem("Help");
         SeparatorMenuItem separator = new SeparatorMenuItem();
-        miDel.setOnAction(_ -> {
-            Job job = form.listView.getSelectionModel().getSelectedItem();
-            if (job != null) {
-                removeJobFromList(job);
-                clearControls();
-            }
-        });
-        miClear.setOnAction(_ -> {
-            getJobs().clear();
-            commitJobListToListView();
-            clearLink();
-            clearFilename();
-            UPDATING_BATCH.setValue(false);
-            form.listView.getItems().clear();
-            M.msgLinkInfo("");
-            M.msgFilenameInfo("");
-            M.msgDirInfo("");
-        });
+        miDel.setOnAction(_ -> handleDeleteClick());
+        miClear.setOnAction(_ -> handleClearClick());
         miHelp.setOnAction(_ -> handleHelpWindow());
         return new ContextMenu(miDel, miClear, separator, miHelp);
+    }
+
+    private void handleClearClick() {
+        getJobs().clear();
+        commitJobListToListView();
+        clearLink();
+        clearFilename();
+        UPDATING_BATCH.setValue(false);
+        form.listView.getItems().clear();
+        M.msgLinkInfo("");
+        M.msgFilenameInfo("");
+        M.msgDirInfo("");
+    }
+
+    private void handleDeleteClick() {
+        Job job = form.listView.getSelectionModel().getSelectedItem();
+        if (job != null) {
+            removeJobFromList(job);
+            clearControls();
+        }
     }
 
     private void setDirContextMenu() {
@@ -641,7 +682,7 @@ public final class UIController {
 
     public static void pasteFromClipboard(String text) {
         INSTANCE.setLink(text);
-        INSTANCE.processLink();
+        INSTANCE.startLinkProcessThread();
     }
 
     private void setLink(String link) {
