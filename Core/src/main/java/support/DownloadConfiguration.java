@@ -43,13 +43,17 @@ public class DownloadConfiguration {
         link = link.trim();
         link = link.replace('\\', '/');
         link = link.replaceFirst("^(?!https?:)", "https://");
+        addRawToGithubLink();
+        if (this.linkType.equals(LinkType.INSTAGRAM)) {
+            this.link = Utility.formatInstagramLink(link);
+        }
+    }
+
+    private void addRawToGithubLink() {
         if (link.startsWith("https://github.com/") || (link.startsWith("http://github.com/"))) {
             if (!link.endsWith("?raw=true")) {
                 link = link + "?raw=true";
             }
-        }
-        if (this.linkType.equals(LinkType.INSTAGRAM)) {
-            this.link = Utility.formatInstagramLink(link);
         }
     }
 
@@ -71,46 +75,9 @@ public class DownloadConfiguration {
         }
         JsonObject jsonObject = JsonParser.parseString(jsonString).getAsJsonObject();
         if (link.contains("playlist")) {
-            JsonArray entries = jsonObject.get("entries").getAsJsonArray();
-            fileCount = entries.size();
-            for (JsonElement entry : entries) {
-                if (Mode.isCLI()) {
-                    System.out.print("\r[" + (filesProcessed + 1) + "/" + fileCount + "] Processing Youtube Playlist...");
-                }
-                JsonObject entryObject = entry.getAsJsonObject();
-                String videoLink = entryObject.get("url").getAsString();
-                String videoTitle = cleanFilename(entryObject.get("title").getAsString());
-                if (videoTitle.isEmpty()) {
-                    videoTitle = "Unknown_YouTube_Video_".concat(randomString(5));
-                }
-                String detectedFilename = videoTitle.concat(".mp4");
-                HashMap<String, Object> data = new HashMap<>();
-                data.put("link", videoLink);
-                data.put("filename", detectedFilename);
-                data.put("directory", this.directory);
-                fileData.add(data);
-                filesProcessed++;
-            }
-            if (Mode.isCLI()) {
-                System.out.println("\rYoutube Playlist processed successfully");
-            } else {
-                msgBroker.msgLinkInfo("Youtube Playlist processed successfully");
-            }
+            processYoutubePlaylist(jsonObject);
         } else {
-            msgBroker.msgLinkInfo("Processing Youtube Video...");
-            fileCount = 1;
-            HashMap<String, Object> data = new HashMap<>();
-            String videoTitle = cleanFilename(jsonObject.get("title").getAsString());
-            if (videoTitle.isEmpty()) {
-                videoTitle = "Unknown_YouTube_Video_".concat(randomString(5));
-            }
-            String detectedFilename = videoTitle.concat(".mp4");
-            data.put("link", link);
-            data.put("filename", this.filename == null ? detectedFilename : this.filename);
-            data.put("directory", this.directory);
-            fileData.add(data);
-            filesProcessed++;
-            msgBroker.msgLinkInfo("Youtube Video processed successfully");
+            processSingleYoutubeVideo(jsonObject);
         }
         if (fileData.isEmpty()) {
             statusCode = -1;
@@ -121,59 +88,69 @@ public class DownloadConfiguration {
         }
     }
 
+    private void processSingleYoutubeVideo(JsonObject jsonObject) {
+        msgBroker.msgLinkInfo("Processing Youtube Video...");
+        fileCount = 1;
+        HashMap<String, Object> data = new HashMap<>();
+        String videoTitle = cleanFilename(jsonObject.get("title").getAsString());
+        videoTitle = nameUnnamedVideo(videoTitle);
+        String detectedFilename = videoTitle.concat(".mp4");
+        data.put("link", link);
+        data.put("filename", this.filename == null ? detectedFilename : this.filename);
+        data.put("directory", this.directory);
+        fileData.add(data);
+        filesProcessed++;
+        msgBroker.msgLinkInfo("Youtube Video processed successfully");
+    }
+
+    private static String nameUnnamedVideo(String videoTitle) {
+        if (videoTitle.isEmpty()) {
+            videoTitle = "Unknown_YouTube_Video_".concat(randomString(5));
+        }
+        return videoTitle;
+    }
+
+    private void processYoutubePlaylist(JsonObject jsonObject) {
+        JsonArray entries = jsonObject.get("entries").getAsJsonArray();
+        fileCount = entries.size();
+        for (JsonElement entry : entries) {
+            processYoutubePlaylistEntry(entry);
+        }
+        displayYoutubePlayListSuccess();
+    }
+
+    private void displayYoutubePlayListSuccess() {
+        if (Mode.isCLI()) {
+            System.out.println("\rYoutube Playlist processed successfully");
+        } else {
+            msgBroker.msgLinkInfo("Youtube Playlist processed successfully");
+        }
+    }
+
+    private void processYoutubePlaylistEntry(JsonElement entry) {
+        if (Mode.isCLI()) {
+            System.out.print("\r[" + (filesProcessed + 1) + "/" + fileCount + "] Processing Youtube Playlist...");
+        }
+        JsonObject entryObject = entry.getAsJsonObject();
+        String videoLink = entryObject.get("url").getAsString();
+        String videoTitle = cleanFilename(entryObject.get("title").getAsString());
+        videoTitle = nameUnnamedVideo(videoTitle);
+        String detectedFilename = videoTitle.concat(".mp4");
+        HashMap<String, Object> data = new HashMap<>();
+        data.put("link", videoLink);
+        data.put("filename", detectedFilename);
+        data.put("directory", this.directory);
+        fileData.add(data);
+        filesProcessed++;
+    }
+
     private int processSpotifyLink() {
         if (link.contains("playlist")) {
-            ArrayList<HashMap<String, Object>> playlistMetadata = Utility.getSpotifyPlaylistMetadata(link);
-            if (playlistMetadata != null && !playlistMetadata.isEmpty()) {
-                fileCount = playlistMetadata.size();
-                ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-                if (Mode.isGUI()) {
-                    executor.scheduleAtFixedRate(this::updateJobList, 1500, 600, TimeUnit.MILLISECONDS);
-                }
-                for (HashMap<String, Object> songMetadata : playlistMetadata) {
-                    if (Mode.isCLI()) {
-                        System.out.print("\r[" + filesProcessed + "/" + fileCount + "] Processing Spotify Playlist...");
-                    } else {
-                        msgBroker.msgLinkInfo("[" + filesProcessed + "/" + fileCount + "] Processing Spotify Playlist...");
-                    }
-                    HashMap<String, Object> data = Utility.getSpotifySongDownloadData(songMetadata, this.directory);
-                    if (data == null) {
-                        msgBroker.msgLogError("Failed to process Spotify Playlist");
-                        filesProcessed++;
-                        statusCode = -1;
-                        return -1;
-                    }
-                    fileData.add(data);
-                    filesProcessed++;
-                }
-                if (Mode.isCLI()) {
-                    System.out.println("\rSpotify Playlist processed successfully");
-                } else {
-                    msgBroker.msgLinkInfo("Spotify Playlist processed successfully");
-                }
-                if (Mode.isGUI()) {
-                    executor.shutdown();
-                }
-            }
+            int playlistStatus = processSpotifyPlayList();
+            if (playlistStatus != 0 ) return playlistStatus;
         } else {
-            HashMap<String, Object> songMetadata = Utility.getSpotifySongMetadata(link);
-            fileCount = 1;
-            if (songMetadata != null && !songMetadata.isEmpty()) {
-                msgBroker.msgLinkInfo("Processing Spotify Song...");
-                HashMap<String, Object> data = Utility.getSpotifySongDownloadData(songMetadata, this.directory);
-                if (data == null) {
-                    msgBroker.msgLogError("Failed to process Spotify Song");
-                    filesProcessed++;
-                    statusCode = -1;
-                    return -1;
-                }
-                if (this.filename != null) {
-                    data.put("filename", this.filename);
-                }
-                fileData.add(data);
-                filesProcessed++;
-                msgBroker.msgLinkInfo("Spotify Song processed successfully");
-            }
+            int songStatus = processSpotifySong();
+            if (songStatus != 0) return songStatus;
         }
         if (fileData.isEmpty()) {
             statusCode = -1;
@@ -182,26 +159,81 @@ public class DownloadConfiguration {
             statusCode = 0;
             return 0;
         }
+    }
+
+    private int processSpotifySong() {
+        HashMap<String, Object> songMetadata = Utility.getSpotifySongMetadata(link);
+        fileCount = 1;
+        if (songMetadata != null && !songMetadata.isEmpty()) {
+            msgBroker.msgLinkInfo("Processing Spotify Song...");
+            HashMap<String, Object> data = Utility.getSpotifySongDownloadData(songMetadata, this.directory);
+            if (data == null) {
+                msgBroker.msgLogError("Failed to process Spotify Song");
+                filesProcessed++;
+                statusCode = -1;
+                return -1;
+            }
+            if (this.filename != null) {
+                data.put("filename", this.filename);
+            }
+            fileData.add(data);
+            filesProcessed++;
+            msgBroker.msgLinkInfo("Spotify Song processed successfully");
+        }
+        return 0;
+    }
+
+    private int processSpotifyPlayList() {
+        ArrayList<HashMap<String, Object>> playlistMetadata = Utility.getSpotifyPlaylistMetadata(link);
+        if (playlistMetadata != null && !playlistMetadata.isEmpty()) {
+            fileCount = playlistMetadata.size();
+            ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+            if (Mode.isGUI()) {
+                executor.scheduleAtFixedRate(this::updateJobList, 1500, 600, TimeUnit.MILLISECONDS);
+            }
+            for (HashMap<String, Object> songMetadata : playlistMetadata) {
+                int songStatus = processSpotifyPlayListEntry(songMetadata);
+                if (songStatus != 0) return songStatus;
+            }
+            displaySpotifyPlayListSuccess();
+            if (Mode.isGUI()) {
+                executor.shutdown();
+            }
+        }
+        return 0;
+    }
+
+    private void displaySpotifyPlayListSuccess() {
+        if (Mode.isCLI()) {
+            System.out.println("\rSpotify Playlist processed successfully");
+        } else {
+            msgBroker.msgLinkInfo("Spotify Playlist processed successfully");
+        }
+    }
+
+    private int processSpotifyPlayListEntry(HashMap<String, Object> songMetadata) {
+        if (Mode.isCLI()) {
+            System.out.print("\r[" + filesProcessed + "/" + fileCount + "] Processing Spotify Playlist...");
+        } else {
+            msgBroker.msgLinkInfo("[" + filesProcessed + "/" + fileCount + "] Processing Spotify Playlist...");
+        }
+        HashMap<String, Object> data = Utility.getSpotifySongDownloadData(songMetadata, this.directory);
+        if (data == null) {
+            msgBroker.msgLogError("Failed to process Spotify Playlist");
+            filesProcessed++;
+            statusCode = -1;
+            return -1;
+        }
+        fileData.add(data);
+        filesProcessed++;
+        return 0;
     }
 
     private int processInstagramLink() {
         String jsonString = Utility.getYtDlpMetadata(link);
         fileCount = 1;
         if (jsonString != null && !jsonString.isEmpty()) {
-            msgBroker.msgLinkInfo("Processing Instagram Post...");
-            JsonObject jsonObject = JsonParser.parseString(jsonString).getAsJsonObject();
-            HashMap<String, Object> data = new HashMap<>();
-            String instagramVideoName = cleanFilename(jsonObject.get("title").getAsString());
-            if (instagramVideoName.isEmpty()) {
-                instagramVideoName = "Unknown_Instagram_Video_".concat(randomString(5));
-            }
-            String detectedFilename = instagramVideoName.concat(".").concat(jsonObject.get("ext").getAsString());
-            data.put("link", link);
-            data.put("filename", this.filename == null ? detectedFilename : this.filename);
-            data.put("directory", this.directory);
-            fileData.add(data);
-            filesProcessed++;
-            msgBroker.msgLinkInfo("Instagram Post processed successfully");
+            processInstagramPost(jsonString);
         }
         if (fileData.isEmpty()) {
             statusCode = -1;
@@ -210,6 +242,23 @@ public class DownloadConfiguration {
             statusCode = 0;
             return 0;
         }
+    }
+
+    private void processInstagramPost(String jsonString) {
+        msgBroker.msgLinkInfo("Processing Instagram Post...");
+        JsonObject jsonObject = JsonParser.parseString(jsonString).getAsJsonObject();
+        HashMap<String, Object> data = new HashMap<>();
+        String instagramVideoName = cleanFilename(jsonObject.get("title").getAsString());
+        if (instagramVideoName.isEmpty()) {
+            instagramVideoName = "Unknown_Instagram_Video_".concat(randomString(5));
+        }
+        String detectedFilename = instagramVideoName.concat(".").concat(jsonObject.get("ext").getAsString());
+        data.put("link", link);
+        data.put("filename", this.filename == null ? detectedFilename : this.filename);
+        data.put("directory", this.directory);
+        fileData.add(data);
+        filesProcessed++;
+        msgBroker.msgLinkInfo("Instagram Post processed successfully");
     }
 
     private int processFileLink() {
@@ -245,34 +294,42 @@ public class DownloadConfiguration {
             return;
         }
         for (HashMap<String, Object> data : fileData) {
-            String link = data.get("link").toString();
-            String filename = data.get("filename").toString();
-            String directory = data.get("directory").toString();
-            linkType = LinkType.getLinkType(link);
-            Job job;
-            if (linkType.equals(LinkType.SPOTIFY)) {
-                Object downloadLinkObj = data.get("downloadLink");
-                String downloadLink = downloadLinkObj != null ? downloadLinkObj.toString() : null;
-                job = new Job(link, directory, filename, downloadLink);
-            } else {
-                job = new Job(link, directory, filename, null);
-            }
-            distinctJobList.put(job.hashCode(), job);
-            try {
-                DbConnection dbConnection = DbConnection.getInstance();
-                dbConnection.addFileRecordToQueue(
-                        filename,
-                        job.getSourceLink(),
-                        job.getDownloadLink(),
-                        directory,
-                        currentSessionId
-                );
-            } catch (SQLException e) {
-                msgBroker.msgLogError("Failed to record job to database during playlist processing: " + e.getMessage());
-                throw new RuntimeException(e);
-            }
+            addDataToDistinctJobList(data, distinctJobList);
         }
         JobService.getJobs().setList(new ConcurrentLinkedDeque<>(distinctJobList.values()));
+    }
+
+    private void addDataToDistinctJobList(HashMap<String, Object> data, Map<Integer, Job> distinctJobList) {
+        String link = data.get("link").toString();
+        String filename = data.get("filename").toString();
+        String directory = data.get("directory").toString();
+        linkType = LinkType.getLinkType(link);
+        Job job;
+        if (linkType.equals(LinkType.SPOTIFY)) {
+            Object downloadLinkObj = data.get("downloadLink");
+            String downloadLink = downloadLinkObj != null ? downloadLinkObj.toString() : null;
+            job = new Job(link, directory, filename, downloadLink);
+        } else {
+            job = new Job(link, directory, filename, null);
+        }
+        distinctJobList.put(job.hashCode(), job);
+        addPlayListEntryToQueue(filename, job, directory);
+    }
+
+    private void addPlayListEntryToQueue(String filename, Job job, String directory) {
+        try {
+            DbConnection dbConnection = DbConnection.getInstance();
+            dbConnection.addFileRecordToQueue(
+                    filename,
+                    job.getSourceLink(),
+                    job.getDownloadLink(),
+                    directory,
+                    currentSessionId
+            );
+        } catch (SQLException e) {
+            msgBroker.msgLogError("Failed to record job to database during playlist processing: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
     }
 
     public String getLink() {
