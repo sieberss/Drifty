@@ -29,7 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import static cli.support.Constants.*;
+import static support.Constants.*;
 import static utils.Utility.isURL;
 import static utils.Utility.sleep;
 
