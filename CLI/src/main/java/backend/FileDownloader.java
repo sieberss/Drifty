@@ -1,6 +1,6 @@
 package backend;
 
-import cli.utils.Utility;
+import utils.Utility;
 import init.Environment;
 import properties.FileState;
 import properties.LinkType;
@@ -24,7 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-import static cli.support.Constants.*;
+import static support.Constants.*;
 import static init.Environment.currentSessionId;
 import static utils.Utility.sleep;
 

@@ -5,11 +5,15 @@ import init.Environment;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.text.StringEscapeUtils;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 import preferences.AppSettings;
 import properties.MessageCategory;
 import properties.Mode;
 import properties.OS;
 import properties.Program;
+import support.Constants;
 
 import java.io.*;
 import java.net.*;
@@ -35,6 +39,7 @@ import static support.Constants.*;
 
 public class Utility {
     private static final Random RANDOM_GENERATOR = new Random(System.currentTimeMillis());
+    private static final Scanner SC = ScannerFactory.getInstance();
     protected static MessageBroker msgBroker;
     private static boolean interrupted;
     private static String ytDlpErrorMessage;
@@ -970,6 +975,45 @@ public class Utility {
         } catch (NumberFormatException e) {
             msgBroker.msgError(errorMessage + " " + e.getMessage(), messageCategory);
             return 0;
+        }
+    }
+
+    public static Yaml getYamlParser() {
+        LoaderOptions loaderOptions = new LoaderOptions();
+        loaderOptions.setAllowDuplicateKeys(false);
+        loaderOptions.setAllowRecursiveKeys(false);
+        loaderOptions.setProcessComments(false);
+        Yaml yamlParser = new Yaml(new SafeConstructor(loaderOptions));
+        msgBroker.msgLogInfo("YAML parser initialized successfully");
+        return yamlParser;
+    }
+
+    public boolean yesNoValidation(String input, String printMessage, boolean isWarning) {
+        while (input.isEmpty()) {
+            Environment.getMessageBroker().msgInputError(Constants.ENTER_Y_OR_N, true);
+            msgBroker.msgLogError(Constants.ENTER_Y_OR_N);
+            if (isWarning) {
+                Environment.getMessageBroker().msgHistoryWarning(printMessage, false);
+            } else {
+                Environment.getMessageBroker().msgInputInfo(printMessage, false);
+            }
+            input = SC.nextLine().toLowerCase();
+        }
+        char choice = input.charAt(0);
+        if (choice == 'y') {
+            return true;
+        } else if (choice == 'n') {
+            return false;
+        } else {
+            Environment.getMessageBroker().msgInputError("Invalid input!", true);
+            msgBroker.msgLogError("Invalid input!");
+            if (isWarning) {
+                Environment.getMessageBroker().msgHistoryWarning(printMessage, false);
+            } else {
+                Environment.getMessageBroker().msgInputInfo(printMessage, false);
+            }
+            input = SC.nextLine().toLowerCase();
+            return yesNoValidation(input, printMessage, isWarning);
         }
     }
 }

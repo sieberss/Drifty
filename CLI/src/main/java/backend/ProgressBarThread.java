@@ -1,6 +1,6 @@
 package backend;
 
-import cli.utils.Utility;
+import utils.Utility;
 import init.Environment;
 import support.DownloadMetrics;
 import utils.MessageBroker;
@@ -12,7 +12,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import static cli.support.Constants.*;
+import static support.Constants.*;
 
 public class ProgressBarThread extends Thread {
     private static final MessageBroker M = Environment.getMessageBroker();

@@ -1,11 +1,11 @@
 package main;
 
 import backend.FileDownloader;
-import cli.init.Environment;
-import cli.updater.CLIUpdateExecutor;
-import cli.utils.MessageBroker;
-import cli.utils.ScannerFactory;
-import cli.utils.Utility;
+import updater.CLIUpdateExecutor;
+import init.Environment;
+import utils.MessageBroker;
+import utils.ScannerFactory;
+import utils.Utility;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.error.YAMLException;
 import preferences.AppSettings;
@@ -30,8 +30,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static cli.support.Constants.*;
-import static cli.utils.Utility.isURL;
-import static cli.utils.Utility.sleep;
+import static utils.Utility.isURL;
+import static utils.Utility.sleep;
 
 public class Drifty_CLI {
     public static final Logger LOGGER = Logger.getInstance();
@@ -52,8 +52,8 @@ public class Drifty_CLI {
 
     public static void main(String[] args) {
         LOGGER.log(MessageType.INFO, CLI_APPLICATION_STARTED);
-        messageBroker = new MessageBroker(System.out);
-        Environment.setCLIMessageBroker(messageBroker);
+        messageBroker = new MessageBroker();
+        Environment.setMessageBroker(messageBroker);
         utility = new Utility();
         checkAndUpdateDrifty(true);
         messageBroker.msgInitInfo("Initializing environment...");
@@ -737,7 +737,7 @@ public class Drifty_CLI {
     }
 
     private static Map<String, List<String>> loadYamlData() {
-        Yaml yamlParser = Utility.getYamlParser();
+        Yaml yamlParser = utils.Utility.getYamlParser();
         Map<String, List<String>> data = null;
         ensureYamlFileExists(); // Ensure the YAML file exists before trying to read
 

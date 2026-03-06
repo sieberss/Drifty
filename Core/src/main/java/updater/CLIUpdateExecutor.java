@@ -1,4 +1,4 @@
-package cli.updater;
+package updater;
 
 import java.io.File;
 

@@ -104,4 +104,27 @@ public class MessageBroker {
             }
         }
     }
+
+    public void msgStyleInfo(String message) {
+        sendMessage(message, MessageType.INFO, MessageCategory.STYLE);
+    }
+
+    public void msgInputError(String message, boolean endWithNewLine) {
+        this.endWithNewLine = endWithNewLine;
+        sendMessage(message, MessageType.ERROR, MessageCategory.INPUT);
+    }
+
+    public void msgInputInfo(String message, boolean endWithNewLine) {
+        this.endWithNewLine = endWithNewLine;
+        sendMessage(message, MessageType.INFO, MessageCategory.INPUT);
+    }
+
+    public void msgHistoryWarning(String message, boolean endWithNewLine) {
+        this.endWithNewLine = endWithNewLine;
+        sendMessage(message, MessageType.WARN, MessageCategory.HISTORY);
+    }
+
+    public void msgUpdateWarning(String message) {
+        sendMessage(message, MessageType.WARN, MessageCategory.UPDATE);
+    }
 }

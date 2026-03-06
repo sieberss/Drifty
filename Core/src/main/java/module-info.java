@@ -8,6 +8,7 @@ module Core {
     requires java.prefs;
     requires java.net.http;
     requires java.sql;
+    requires org.yaml.snakeyaml;
     exports init;
     exports preferences;
     exports properties;
