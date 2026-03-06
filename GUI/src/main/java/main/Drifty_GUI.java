@@ -1,6 +1,6 @@
 package main;
 
-import gui.init.Environment;
+import init.Environment;
 import gui.preferences.AppSettings;
 import gui.support.Constants;
 import gui.utils.MessageBroker;
@@ -42,7 +42,7 @@ public class Drifty_GUI extends Application {
     public void init() {
         System.setProperty("apple.laf.useScreenMenuBar", "true");
         msgBroker = new MessageBroker();
-        Environment.setGUIMessageBroker(msgBroker);
+        Environment.setMessageBroker(msgBroker);
         msgBroker.msgLogInfo("Drifty GUI (Graphical User Interface) Application Started !");
         Environment.initializeEnvironment();
         notifyPreloader(new Preloader.StateChangeNotification(Preloader.StateChangeNotification.Type.BEFORE_START));

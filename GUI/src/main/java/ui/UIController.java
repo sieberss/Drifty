@@ -1,14 +1,14 @@
 package ui;
 
 import backend.FileDownloader;
-import gui.init.Environment;
 import gui.preferences.AppSettings;
 import gui.support.Constants;
 import gui.support.Folders;
 import gui.support.GUIDownloadConfiguration;
-import gui.updater.GUIUpdateExecutor;
+import init.Environment;
+import updater.GUIUpdateExecutor;
 import gui.utils.CheckFile;
-import gui.utils.MessageBroker;
+import utils.MessageBroker;
 import javafx.application.Platform;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.BooleanProperty;

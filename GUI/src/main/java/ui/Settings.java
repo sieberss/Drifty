@@ -1,8 +1,8 @@
 package ui;
 
 import gui.preferences.AppSettings;
-import gui.init.Environment;
 import gui.support.Constants;
+import init.Environment;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.scene.Node;

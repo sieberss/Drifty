@@ -1,9 +1,9 @@
 package ui;
 
 import gui.preferences.AppSettings;
-import gui.init.Environment;
 import gui.support.Constants;
 import gui.support.Folders;
+import init.Environment;
 import javafx.beans.binding.BooleanBinding;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;

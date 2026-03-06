@@ -1,7 +1,7 @@
-package gui.updater;
+package updater;
 
-import gui.init.Environment;
-import gui.preferences.AppSettings;
+import init.Environment;
+import preferences.AppSettings;
 import org.buildobjects.process.ProcBuilder;
 import org.buildobjects.process.ProcResult;
 import properties.OS;

@@ -1,8 +1,8 @@
 package ui;
 
-import gui.init.Environment;
 import gui.preferences.AppSettings;
 import gui.support.Constants;
+import init.Environment;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;

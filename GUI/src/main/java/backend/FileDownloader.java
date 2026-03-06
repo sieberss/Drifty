@@ -1,8 +1,8 @@
 package backend;
 
-import gui.init.Environment;
 import gui.support.SplitDownloadMetrics;
-import gui.utils.MessageBroker;
+import utils.MessageBroker;
+import init.Environment;
 import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;

@@ -1,6 +1,7 @@
 package gui.utils;
 
-import gui.init.Environment;
+import utils.MessageBroker;
+import init.Environment;
 import org.apache.commons.io.FilenameUtils;
 
 import java.io.IOException;

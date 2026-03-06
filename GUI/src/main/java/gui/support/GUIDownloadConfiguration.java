@@ -1,7 +1,7 @@
 package gui.support;
 
-import gui.init.Environment;
-import gui.utils.MessageBroker;
+import utils.MessageBroker;
+import init.Environment;
 import support.DownloadConfiguration;
 
 public class GUIDownloadConfiguration extends DownloadConfiguration {
