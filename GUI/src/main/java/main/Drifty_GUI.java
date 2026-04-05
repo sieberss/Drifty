@@ -1,7 +1,7 @@
 package main;
 
-import init.Environment;
-import gui.preferences.AppSettings;
+import gui.init.Environment;
+import settings.AppSettings;
 import gui.support.Constants;
 import gui.utils.MessageBroker;
 import javafx.application.Application;
@@ -42,7 +42,7 @@ public class Drifty_GUI extends Application {
     public void init() {
         System.setProperty("apple.laf.useScreenMenuBar", "true");
         msgBroker = new MessageBroker();
-        Environment.setMessageBroker(msgBroker);
+        Environment.setGUIMessageBroker(msgBroker);
         msgBroker.msgLogInfo("Drifty GUI (Graphical User Interface) Application Started !");
         Environment.initializeEnvironment();
         notifyPreloader(new Preloader.StateChangeNotification(Preloader.StateChangeNotification.Type.BEFORE_START));
@@ -72,7 +72,7 @@ public class Drifty_GUI extends Application {
         placeControl(gridPane, 40, 40, 40, 40);
         placeControl(menu, 0, 0, 0, -1);
         scene = Constants.getScene(ap);
-        if ("Dark".equals(AppSettings.GET.mainTheme())) {
+        if ("Dark".equals(AppSettings.getGuiTheme())) {
             Constants.addCSS(scene, Constants.DARK_THEME_CSS);
         }
         scene.setOnContextMenuRequested(

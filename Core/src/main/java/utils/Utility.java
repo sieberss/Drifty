@@ -5,15 +5,11 @@ import init.Environment;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.text.StringEscapeUtils;
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
-import preferences.AppSettings;
+import settings.AppSettings;
 import properties.MessageCategory;
 import properties.Mode;
 import properties.OS;
 import properties.Program;
-import support.Constants;
 
 import java.io.*;
 import java.net.*;
@@ -39,7 +35,6 @@ import static support.Constants.*;
 
 public class Utility {
     private static final Random RANDOM_GENERATOR = new Random(System.currentTimeMillis());
-    private static final Scanner SC = ScannerFactory.getInstance();
     protected static MessageBroker msgBroker;
     private static boolean interrupted;
     private static String ytDlpErrorMessage;
@@ -123,8 +118,8 @@ public class Utility {
             executableNames = new String[]{"Drifty-CLI_macos_" + arch, "Drifty-CLI.exe", "Drifty-CLI_linux"};
         }
         String updateURLMiddle;
-        if (AppSettings.GET.earlyAccess()) {
-            updateURLMiddle = "download/" + AppSettings.GET.latestDriftyVersionTag() + "/";
+        if (AppSettings.isEarlyAccessEnabled()) {
+            updateURLMiddle = "download/" + AppSettings.getLatestDriftyVersionTag() + "/";
         } else {
             updateURLMiddle = "latest/download/";
         }
@@ -231,7 +226,7 @@ public class Utility {
                 HttpRequest getSongMetadata = HttpRequest.newBuilder()
                         .uri(new URI("https://api.spotify.com/v1/tracks/" + trackId))
                         .GET()
-                        .header("Authorization", "Bearer " + AppSettings.GET.spotifyAccessToken())
+                        .header("Authorization", "Bearer " + AppSettings.getSpotifyAccessToken())
                         .header("accept-encoding", "gzip, deflate")
                         .header("content-encoding", "gzip")
                         .build();
@@ -309,7 +304,7 @@ public class Utility {
             HttpRequest getPlaylistMetadata = HttpRequest.newBuilder()
                     .uri(new URI(spotifyPlaylistAPIUrl))
                     .GET()
-                    .header("Authorization", "Bearer " + AppSettings.GET.spotifyAccessToken())
+                    .header("Authorization", "Bearer " + AppSettings.getSpotifyAccessToken())
                     .header("accept-encoding", "gzip, deflate")
                     .header("content-encoding", "gzip")
                     .build();
@@ -848,7 +843,7 @@ public class Utility {
         Path ffmpegPath = Paths.get(Program.get(Program.FFMPEG));
         if (!Files.exists(ffmpegPath)) {
             msgBroker.msgLogError("FFMPEG not found at " + ffmpegPath);
-            AppSettings.SET.isFfmpegWorking(false);
+            AppSettings.setFfmpegWorking(false);
         } else {
             msgBroker.msgLogInfo("FFMPEG found at " + ffmpegPath);
             ProcessBuilder getFfmpegVersion = new ProcessBuilder(ffmpegPath.toString(), "-version");
@@ -861,14 +856,14 @@ public class Utility {
                             String version = line.split(" ")[2];
                             msgBroker.msgLogInfo("FFMPEG version: " + version);
                             msgBroker.msgLogInfo(line);
-                            AppSettings.SET.isFfmpegWorking(true);
-                            AppSettings.SET.ffmpegVersion(version);
+                            AppSettings.setFfmpegWorking(true);
+                            AppSettings.setFfmpegVersion(version);
                         }
                     }
                 }
             } catch (IOException e) {
                 msgBroker.msgLogError("Failed to get FFMPEG version : " + e.getMessage());
-                AppSettings.SET.isFfmpegWorking(false);
+                AppSettings.setFfmpegWorking(false);
             }
         }
     }
@@ -887,7 +882,7 @@ public class Utility {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(ytDlpVersionTask).getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    AppSettings.SET.ytDlpVersion(line);
+                    AppSettings.setYtDlpVersion(line);
                 }
             } catch (IOException e) {
                 msgBroker.msgInitError("Failed to get yt-dlp version! " + e.getMessage());
@@ -917,7 +912,7 @@ public class Utility {
                     }
                 }
                 JsonObject jsonObject = JsonParser.parseString(responseContent.toString()).getAsJsonObject();
-                AppSettings.SET.spotifyAccessToken(jsonObject.get("access_token").getAsString());
+                AppSettings.setSpotifyAccessToken(jsonObject.get("access_token").getAsString());
             } catch (UnknownHostException e) {
                 msgBroker.msgLogError("You are not connected to the Internet!");
                 ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
@@ -975,45 +970,6 @@ public class Utility {
         } catch (NumberFormatException e) {
             msgBroker.msgError(errorMessage + " " + e.getMessage(), messageCategory);
             return 0;
-        }
-    }
-
-    public static Yaml getYamlParser() {
-        LoaderOptions loaderOptions = new LoaderOptions();
-        loaderOptions.setAllowDuplicateKeys(false);
-        loaderOptions.setAllowRecursiveKeys(false);
-        loaderOptions.setProcessComments(false);
-        Yaml yamlParser = new Yaml(new SafeConstructor(loaderOptions));
-        msgBroker.msgLogInfo("YAML parser initialized successfully");
-        return yamlParser;
-    }
-
-    public boolean yesNoValidation(String input, String printMessage, boolean isWarning) {
-        while (input.isEmpty()) {
-            Environment.getMessageBroker().msgInputError(Constants.ENTER_Y_OR_N, true);
-            msgBroker.msgLogError(Constants.ENTER_Y_OR_N);
-            if (isWarning) {
-                Environment.getMessageBroker().msgHistoryWarning(printMessage, false);
-            } else {
-                Environment.getMessageBroker().msgInputInfo(printMessage, false);
-            }
-            input = SC.nextLine().toLowerCase();
-        }
-        char choice = input.charAt(0);
-        if (choice == 'y') {
-            return true;
-        } else if (choice == 'n') {
-            return false;
-        } else {
-            Environment.getMessageBroker().msgInputError("Invalid input!", true);
-            msgBroker.msgLogError("Invalid input!");
-            if (isWarning) {
-                Environment.getMessageBroker().msgHistoryWarning(printMessage, false);
-            } else {
-                Environment.getMessageBroker().msgInputInfo(printMessage, false);
-            }
-            input = SC.nextLine().toLowerCase();
-            return yesNoValidation(input, printMessage, isWarning);
         }
     }
 }

@@ -10,10 +10,11 @@ module Core {
     requires java.sql;
     requires org.yaml.snakeyaml;
     exports init;
-    exports preferences;
+    exports settings;
     exports properties;
     exports support;
     exports updater;
     exports utils;
+    exports data;
     opens support to com.google.gson;
 }
