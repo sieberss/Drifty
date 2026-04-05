@@ -329,7 +329,36 @@ public class DownloadConfiguration {
         } catch (SQLException e) {
             msgBroker.msgLogError("Failed to record job to database during playlist processing: " + e.getMessage());
             throw new RuntimeException(e);
+            String link = data.get("link").toString();
+            String filename = data.get("filename").toString();
+            String directory = data.get("directory").toString();
+            linkType = LinkType.getLinkType(link);
+            Job job;
+            if (linkType.equals(LinkType.SPOTIFY)) {
+                Object downloadLinkObj = data.get("downloadLink");
+                String downloadLink = downloadLinkObj != null ? downloadLinkObj.toString() : null;
+                job = new Job(link, directory, filename, downloadLink);
+            } else {
+                job = new Job(link, directory, filename, null);
+            }
+            distinctJobList.put(job.hashCode(), job);
+            try {
+                DbConnection dbConnection = DbConnection.getInstance();
+                dbConnection.addFileRecordToQueue(
+                        filename,
+                        job.getSourceLink(),
+                        job.getDownloadLink(),
+                        directory,
+                        currentSessionId
+                );
+            } catch (SQLException e) {
+                msgBroker.msgLogError("Failed to record job to database during playlist processing: " + e.getMessage());
+                throw new RuntimeException(e);
+            }
         }
+        /* aims to update Job list, but updated list is dropped immediately -> no effect
+        JobService.getJobs().setList(new ConcurrentLinkedDeque<>(distinctJobList.values()));
+         */
     }
 
     public String getLink() {
