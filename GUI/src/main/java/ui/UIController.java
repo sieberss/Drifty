@@ -33,9 +33,10 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import main.Drifty_GUI;
 import properties.OS;
-import data.Job;
-import data.JobQueue;
-import data.FileRepo;
+import support.Job;
+import support.JobHistory;
+import support.Jobs;
+import utils.DbConnection;
 import utils.Utility;
 
 import java.io.File;
@@ -70,7 +71,6 @@ public final class UIController {
     private String filename;
     private Folders folders;
     private Job selectedJob;
-    private JobQueue jobQueue;
 
     public static Scene getInfoScene() {
         return infoScene;
@@ -85,7 +85,6 @@ public final class UIController {
     */
     private UIController() {
         folders = new Folders();
-        jobQueue = JobService.getJobs();
     }
 
     /*
@@ -120,7 +119,6 @@ public final class UIController {
     private void downloadUpdate() {
         String previouslySelectedDir = getDir(); // Save the download folder selected before the update was initiated.
         try {
-            getJobs();
             // "Current executable" means the executable currently running i.e., the one that is outdated.
             File currentExecutableFile = new File(Drifty_GUI.class.getProtectionDomain().getCodeSource().getLocation().toURI());
             // "Latest executable" means the executable that is to be downloaded and installed i.e., the latest version.
@@ -131,10 +129,12 @@ public final class UIController {
             // For other OS, the latest executable name along with the extension is the same as that of the current executable.
             String latestExecutableName = OS.isMac() ? "Drifty_GUI.pkg" : currentExecutableFile.getName();
             File latestExecutableFile = Paths.get(tmpFolder.getPath()).resolve(latestExecutableName).toFile();
-            // Get the download queue already present in the application before adding the latest executable to it. This is done to ensure that the latest executable is downloaded first and alone.
-            ConcurrentLinkedDeque<Job> currentDownloadQueue = jobQueue.jobList();
-            // Clear the download queue to download only the latest executable to prevent any other downloads from interfering with the update process.
-            jobQueue.clear();
+            /* Get the download queue already present in the application before adding the latest executable to it. This is done to ensure that the latest executable is downloaded first and alone.
+            ConcurrentLinkedDeque<Job> currentDownloadQueue = getJobs().jobList();
+            Clear the download queue to download only the latest executable to prevent any other downloads from interfering with the update process.
+            getJobs().clear();
+            no effect. Clears only a newly created queue
+             */
 
             // Download the latest executable
             Job updateJob = new Job(Constants.updateURL.toString(), latestExecutableFile.getParent(), latestExecutableFile.getName(), Constants.updateURL.toString());
@@ -146,8 +146,10 @@ public final class UIController {
             }
             setDir(previouslySelectedDir); // Reset the download folder to the one that was selected before the update was initiated.
             AppSettings.setLastDownloadFolder(previouslySelectedDir); // Reset the download folder to the one that was selected before the update was initiated.
-            // Reset the download queue to the previous state.
-            jobQueue.setList(currentDownloadQueue);
+            /* Reset the download queue to the previous state.
+            getJobs().setList(currentDownloadQueue);
+            no effect. Manipulation of a newly created object that is dropped immediately
+             */
             if (latestExecutableFile.exists() && latestExecutableFile.isFile() && latestExecutableFile.length() > 0) {
                 // If the latest executable was successfully downloaded, set the executable permission and execute the update.
                 GUIUpdateExecutor updateExecutor = new GUIUpdateExecutor(currentExecutableFile, latestExecutableFile);
@@ -252,7 +254,7 @@ public final class UIController {
                     if (job != null) {
                         selectJob(job);
                         setLink(job.getSourceLink());
-                        setDir(job.getLocalDirectory());
+                        setDir(job.getDir());
                         setFilename(job.getFilename());
                     }
                 }
@@ -336,8 +338,8 @@ public final class UIController {
             if (!linkInJobList(link)) {
                 M.msgLinkInfo("Validating link...");
                 if (Utility.isLinkValid(link)) {
-                    if (JobService.getJobHistory().exists(link)) {
-                        Job job = JobService.getJobHistory().getJob(link);
+                    if (getHistory().exists(link)) {
+                        Job job = getHistory().getJob(link);
                         String filename = job.getFilename();
                         dir = getDir();
                         if (dir == null) {
@@ -430,10 +432,11 @@ public final class UIController {
                     }
                 }
             }));
-            if (jobQueue.notNull() && !jobQueue.isEmpty()) {
-                final int totalFiles = jobQueue.jobList().size();
+            Jobs jobs = getJobs();
+            if (jobs.notNull() && !jobs.isEmpty()) {
+                final int totalFiles = jobs.jobList().size();
                 int fileCount = 0;
-                LinkedList<Job> tempJobList = new LinkedList<>(jobQueue.jobList());
+                LinkedList<Job> tempJobList = new LinkedList<>(jobs.jobList());
                 for (Job job : tempJobList) {
                     fileCount++;
                     M.msgBatchInfo("Processing file " + fileCount + " of " + totalFiles + ": " + job);
@@ -443,12 +446,13 @@ public final class UIController {
                         while (downloadFile.notDone()) {
                             sleep(500);
                         }
-                        int exitCode = downloadFile.getExitCode();
+                        // int exitCode = downloadFile.getExitCode();
                         removeJobFromList(job);
                         setDownloadInfoColor(GREEN);
+                        /* no effect, list with added job is dropped immediately
                         if (exitCode == 0) { // Success
-                            JobService.getJobHistory().addJob(job, false);
-                        }
+                            getHistory().addJob(job, false);
+                        }*/
                     }
                 }
             }
@@ -476,7 +480,7 @@ public final class UIController {
     }
 
     private boolean linkInJobList(String link) {
-        for (Job job : jobQueue.jobList()) {
+        for (Job job : getJobs().jobList()) {
             if (job.getSourceLink().equals(link)) {
                 return true;
             }
@@ -486,52 +490,64 @@ public final class UIController {
 
     private void addJob(Job newJob) {
         Job oldJob = null;
-        for (Job job : jobQueue.jobList()) {
-            if (job.sourceLinkEquals(newJob)) {
+        for (Job job : getJobs().jobList()) {
+            if (job.matchesLink(newJob)) {
                 oldJob = job;
                 break;
             }
         }
         if (oldJob != null) {
             try {
-                FileRepo fileRepo = FileRepo.getInstance();
-                fileRepo.updateQueuedFileByName(
+                DbConnection dbConnection = DbConnection.getInstance();
+                dbConnection.updateFile(
                         newJob.getFilename(),
                         oldJob.getSourceLink(),
-                        newJob.getLocalDirectory()
+                        newJob.getDir()
                 );
             } catch (SQLException e) {
                 M.msgLogError("Failed to update job in database: " + e.getMessage());
                 return;
             }
-            jobQueue.remove(oldJob);
+            /* no effect. Manipulates a newly created list that is dropped immediately
+            getJobs().remove(oldJob);
+             */
         } else {
             try {
-                FileRepo fileRepo = FileRepo.getInstance();
-                fileRepo.addJobToQueue(newJob, currentSessionId);
+                DbConnection dbConnection = DbConnection.getInstance();
+                dbConnection.addFileRecordToQueue(
+                        newJob.getFilename(),
+                        newJob.getSourceLink(),
+                        newJob.getDownloadLink(),
+                        newJob.getDir(),
+                        currentSessionId
+                );
             } catch (SQLException e) {
                 M.msgLogError("Failed to add job to database: " + e.getMessage());
                 return;
             }
             System.out.println("Job Added: " + newJob.getFilename());
         }
-        jobQueue.add(newJob);
+        /* getJobs().add(newJob);
+        no effect. Manipulates a newly created list that is dropped immediately
+         */
         commitJobListToListView();
     }
 
     private void removeJobFromList(Job oldJob) {
         try {
-            FileRepo fileRepo = FileRepo.getInstance();
-            fileRepo.deleteQueuedFileByName(
+            DbConnection dbConnection = DbConnection.getInstance();
+            dbConnection.deleteQueuedFile(
                     oldJob.getSourceLink(),
-                    oldJob.getLocalDirectory(),
+                    oldJob.getDir(),
                     oldJob.getFilename()
             );
         } catch (SQLException e) {
             M.msgLogError("Failed to remove job from database: " + e.getMessage());
             return;
         }
-        jobQueue.remove(oldJob);
+        /* no effect. Manipulates a newly created list that is dropped immediately
+        getJobs().remove(oldJob);
+         */
         commitJobListToListView();
         M.msgBatchInfo("Job Removed: " + oldJob.getSourceLink());
     }
@@ -575,7 +591,9 @@ public final class UIController {
             }
         });
         miClear.setOnAction(_ -> {
-            jobQueue.clear();
+            /* no effect. Manipulates a newly created list that is dropped immediately
+            getJobs().clear();
+             */
             commitJobListToListView();
             clearLink();
             clearFilename();
@@ -623,10 +641,12 @@ public final class UIController {
         /*
         Called from the Edit menu, this wipes out the job history which is stored in the users file system
          */
-        JobService.getJobHistory().clear();
+        /* no effect, cleared history list is dropped immediately
+        INSTANCE.getHistory().clear();
+         */
         try {
-            FileRepo fileRepo = FileRepo.getInstance();
-            fileRepo.deleteFilesHistory();
+            DbConnection dbConnection = DbConnection.getInstance();
+            dbConnection.deleteFilesHistory();
         } catch (SQLException e) {
             ConfirmationDialog ask = new ConfirmationDialog("Error", "Failed to clear job history! " + e.getMessage(), true, false);
             ask.getResponse();
@@ -778,12 +798,13 @@ public final class UIController {
 
     private void commitJobListToListView() {
         Platform.runLater(() -> {
-            if (jobQueue.notNull()) {
-                if (jobQueue.isEmpty()) {
+            Jobs jobs = getJobs();
+            if (jobs.notNull()) {
+                if (jobs.isEmpty()) {
                     form.listView.getItems().clear();
                 } else {
                     // Assign the jobList to the ListView
-                    form.listView.getItems().setAll(jobQueue.jobList());
+                    form.listView.getItems().setAll(jobs.jobList());
                 }
             }
         });
@@ -886,8 +907,12 @@ public final class UIController {
         }
     }
 
-    private void getJobs() {
-        jobQueue = JobService.getJobs();
+    private Jobs getJobs() {
+        return JobService.getJobs();
+    }
+
+    private JobHistory getHistory() {
+        return JobService.getJobHistory();
     }
 
     private void selectJob(Job job) {

@@ -4,13 +4,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import data.Job;
-import data.JobQueue;
 import data.JobService;
 import init.Environment;
 import properties.LinkType;
 import properties.Mode;
-import data.FileRepo;
+import utils.DbConnection;
 import utils.MessageBroker;
 import utils.Utility;
 
@@ -238,9 +236,9 @@ public class DownloadConfiguration {
     }
 
     public void updateJobList() {
-        JobQueue jobQueue = JobService.getJobs();
+        Jobs jobs = JobService.getJobs();
         Map<Integer, Job> distinctJobList = new ConcurrentHashMap<>();
-        for (Job job : jobQueue.jobList()) {
+        for (Job job : jobs.jobList()) {
             distinctJobList.put(job.hashCode(), job);
         }
         if (fileData.isEmpty()) {
@@ -261,14 +259,22 @@ public class DownloadConfiguration {
             }
             distinctJobList.put(job.hashCode(), job);
             try {
-                FileRepo fileRepo = FileRepo.getInstance();
-                fileRepo.addJobToQueue(job, currentSessionId);
+                DbConnection dbConnection = DbConnection.getInstance();
+                dbConnection.addFileRecordToQueue(
+                        filename,
+                        job.getSourceLink(),
+                        job.getDownloadLink(),
+                        directory,
+                        currentSessionId
+                );
             } catch (SQLException e) {
                 msgBroker.msgLogError("Failed to record job to database during playlist processing: " + e.getMessage());
                 throw new RuntimeException(e);
             }
         }
-        jobQueue.setList(new ConcurrentLinkedDeque<>(distinctJobList.values()));
+        /* aims to update Job list, but updated list is dropped immediately -> no effect
+        JobService.getJobs().setList(new ConcurrentLinkedDeque<>(distinctJobList.values()));
+         */
     }
 
     public String getLink() {
